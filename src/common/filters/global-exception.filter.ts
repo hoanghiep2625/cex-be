@@ -59,6 +59,8 @@ export class GlobalExceptionFilter implements ExceptionFilter {
         return 'Forbidden';
       case HttpStatus.NOT_FOUND:
         return 'Not Found';
+      case HttpStatus.CONFLICT:
+        return 'Conflict';
       case HttpStatus.UNPROCESSABLE_ENTITY:
         return 'Validation Error';
       case HttpStatus.INTERNAL_SERVER_ERROR:

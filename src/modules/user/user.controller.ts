@@ -1,41 +1,24 @@
-import { UserService } from 'src/modules/user/user.service';
+import { UserService } from './user.service';
 import {
-  Body,
   Controller,
-  Delete,
   Get,
   Param,
-  Post,
-  Put,
+  UseGuards,
 } from '@nestjs/common';
-import { UserDto } from 'src/modules/user/dto/user.dto';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 
 @Controller('users')
 export class UserController {
   constructor(private readonly userService: UserService) {}
 
   @Get()
-  getAllUsers() {
-    return this.userService.getAllUsers();
+  @UseGuards(JwtAuthGuard) // Cần đăng nhập mới xem được danh sách user
+  async getAllUsers() {
+    return await this.userService.getAllUsers();
   }
 
   @Get('/:id')
-  getUserById(@Param('id') id: number) {
-    return this.userService.getUserById(id);
-  }
-
-  @Post()
-  createUser(@Body() userDto: UserDto) {
-    return this.userService.createUser(userDto);
-  }
-
-  @Put('/:id')
-  updateUser(@Body() userDto: UserDto, @Param('id') id: number) {
-    return this.userService.updateUser(userDto, id);
-  }
-
-  @Delete('/:id')
-  deleteUser(@Param('id') id: number) {
-    return this.userService.deleteUser(id);
+  async getUserById(@Param('id') id: string) {
+    return await this.userService.getUserById(Number(id));
   }
 }

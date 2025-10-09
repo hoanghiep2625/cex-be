@@ -1,37 +1,41 @@
-import { Body, Injectable } from '@nestjs/common';
-import { UserDto } from 'src/modules/user/dto/user.dto';
+import {
+  Injectable,
+  ConflictException,
+  NotFoundException,
+} from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
+import { User } from './entities/user.entity';
+import { UserDto } from './dto/user.dto';
 
 @Injectable()
 export class UserService {
-  private users = [
-    { id: 1, name: 'hoanghiep', email: 'hoanghiep@example.com' },
-    { id: 2, name: 'john', email: 'john@example.com' },
-    { id: 3, name: 'jane', email: 'jane@example.com' },
-  ];
+  constructor(
+    @InjectRepository(User)
+    private readonly userRepository: Repository<User>,
+  ) {}
 
-  getAllUsers() {
-    return this.users;
+  async getAllUsers(): Promise<User[]> {
+    return await this.userRepository.find();
   }
 
-  getUserById(id: number) {
-    return this.users.find((item) => item.id === Number(id));
-  }
-
-  createUser(@Body() userDto: UserDto) {
-    this.users.push({ id: this.users.length + 1, ...userDto });
-    return this.users;
-  }
-
-  updateUser(@Body() userDto: UserDto, id: number) {
-    const user = this.users.find((item) => item.id === Number(id));
-    if (user) {
-      Object.assign(user, userDto);
+  async getUserById(id: number): Promise<User> {
+    const user = await this.userRepository.findOne({ where: { id } });
+    if (!user) {
+      throw new NotFoundException(`User with ID ${id} not found`);
     }
-    return this.users;
+    return user;
   }
 
-  deleteUser(id: number) {
-    this.users = this.users.filter((item) => item.id !== Number(id));
-    return this.users;
+  async createUser(userDto: UserDto): Promise<User> {
+    try {
+      const user = this.userRepository.create(userDto);
+      return await this.userRepository.save(user);
+    } catch (error) {
+      if (error.code === '23505') {
+        throw new ConflictException(`Email '${userDto.email}' đã tồn tại`);
+      }
+      throw error;
+    }
   }
 }
