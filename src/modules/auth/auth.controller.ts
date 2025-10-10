@@ -1,4 +1,11 @@
-import { Controller, Post, Body, Res, Req } from '@nestjs/common';
+import {
+  Controller,
+  Post,
+  Body,
+  Res,
+  Req,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { Response, Request } from 'express';
 import { AuthService } from './auth.service';
 import { RegisterDto } from './dto/register.dto';
@@ -38,9 +45,20 @@ export class AuthController {
     const refreshToken = req.cookies?.refreshToken;
 
     if (!refreshToken) {
-      throw new Error('Refresh token không tồn tại');
+      throw new UnauthorizedException('Không tìm thấy refresh token');
     }
 
     return await this.authService.refreshAccessToken(refreshToken);
+  }
+  
+  @Post('logout')
+  async logout(@Res({ passthrough: true }) res: Response) {
+    // Xoá cookie refresh token
+    res.clearCookie('refreshToken', {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'strict',
+    });
+    return { message: 'Đăng xuất thành công' };
   }
 }

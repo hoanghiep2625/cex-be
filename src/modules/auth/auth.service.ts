@@ -81,7 +81,6 @@ export class AuthService {
     accessToken: string;
     refreshToken: string;
   }> {
-    // Tìm user theo email
     const user = await this.userRepository.findOne({
       where: { email: loginDto.email },
     });

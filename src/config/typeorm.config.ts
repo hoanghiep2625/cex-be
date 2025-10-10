@@ -18,7 +18,7 @@ export const typeOrmConfig: TypeOrmModuleOptions = {
   database: process.env.DB_NAME || 'cex',
   entities: ['dist/**/*.entity{.ts,.js}'],
   migrations: ['dist/migrations/*{.ts,.js}'],
-  synchronize: true, // Chỉ dùng trong dev, tránh dùng trong production
+  synchronize: process.env.TYPEORM_SYNC === 'false', // Chỉ dùng trong dev, tránh dùng trong production
   logging: true,
 };
 

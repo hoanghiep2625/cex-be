@@ -44,6 +44,8 @@ export class GlobalExceptionFilter implements ExceptionFilter {
       statusCode: status,
       message,
       error: this.getErrorName(status),
+      timestamp: new Date().toISOString(),
+      path: request.url,
     };
 
     response.status(status).json(errorResponse);

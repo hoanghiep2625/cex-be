@@ -4,6 +4,9 @@ import {
   Get,
   Param,
   UseGuards,
+  Query,
+  ParseIntPipe,
+  DefaultValuePipe,
 } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 
@@ -13,12 +16,15 @@ export class UserController {
 
   @Get()
   @UseGuards(JwtAuthGuard) // Cần đăng nhập mới xem được danh sách user
-  async getAllUsers() {
-    return await this.userService.getAllUsers();
+  async getAllUsers(
+    @Query('page', new DefaultValuePipe(1), ParseIntPipe) page: number,
+    @Query('limit', new DefaultValuePipe(10), ParseIntPipe) limit: number,
+  ) {
+    return await this.userService.getAllUsers(page, limit);
   }
 
   @Get('/:id')
-  async getUserById(@Param('id') id: string) {
-    return await this.userService.getUserById(Number(id));
+  async getUserById(@Param('id', ParseIntPipe) id: number) {
+    return await this.userService.getUserById(id);
   }
 }

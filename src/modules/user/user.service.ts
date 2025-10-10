@@ -15,8 +15,33 @@ export class UserService {
     private readonly userRepository: Repository<User>,
   ) {}
 
-  async getAllUsers(): Promise<User[]> {
-    return await this.userRepository.find();
+  async getAllUsers(
+    page: number = 1,
+    limit: number = 10,
+  ): Promise<{
+    data: User[];
+    total: number;
+    page: number;
+    limit: number;
+    totalPages: number;
+  }> {
+    const skip = (page - 1) * limit;
+
+    const [data, total] = await this.userRepository.findAndCount({
+      skip,
+      take: limit,
+      order: { id: 'DESC' }, // Sort by ID descending (newest first)
+    });
+
+    const totalPages = Math.ceil(total / limit);
+
+    return {
+      data,
+      total,
+      page,
+      limit,
+      totalPages,
+    };
   }
 
   async getUserById(id: number): Promise<User> {
@@ -25,17 +50,5 @@ export class UserService {
       throw new NotFoundException(`User with ID ${id} not found`);
     }
     return user;
-  }
-
-  async createUser(userDto: UserDto): Promise<User> {
-    try {
-      const user = this.userRepository.create(userDto);
-      return await this.userRepository.save(user);
-    } catch (error) {
-      if (error.code === '23505') {
-        throw new ConflictException(`Email '${userDto.email}' đã tồn tại`);
-      }
-      throw error;
-    }
   }
 }
