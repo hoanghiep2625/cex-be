@@ -6,6 +6,12 @@ import {
   UpdateDateColumn,
 } from 'typeorm';
 
+export enum UserRole {
+  USER = 'USER',
+  ADMIN = 'ADMIN',
+  SUPER_ADMIN = 'SUPER_ADMIN',
+}
+
 /**
  * User Entity - Định nghĩa cấu trúc bảng users trong database
  * Sử dụng TypeORM decorators để map class với database table
@@ -23,6 +29,20 @@ export class User {
 
   @Column() // Cột mật khẩu (nên hash trước khi lưu)
   password: string;
+
+  @Column({
+    type: 'enum',
+    enum: UserRole,
+    default: UserRole.USER,
+  })
+  role: UserRole; // Role của user (USER, ADMIN, SUPER_ADMIN)
+
+  @Column({
+    name: 'is_active',
+    type: 'boolean',
+    default: true,
+  })
+  isActive: boolean; // Tài khoản có active không
 
   @CreateDateColumn() // Tự động set thời gian tạo record
   createdAt: Date;

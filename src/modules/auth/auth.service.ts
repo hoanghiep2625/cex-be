@@ -7,9 +7,10 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { JwtService } from '@nestjs/jwt';
 import { Repository } from 'typeorm';
 import * as bcrypt from 'bcrypt';
-import { User } from '../user/entities/user.entity';
+import { User } from '../users/entities/user.entity';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
+import { BalanceService } from 'src/modules/balances/balance.service';
 
 @Injectable()
 export class AuthService {
@@ -25,6 +26,7 @@ export class AuthService {
       email: user.email,
       sub: user.id,
       username: user.username,
+      role: user.role, // ✅ Include role trong token
     };
     return this.jwtService.sign(payload, {
       secret: process.env.JWT_ACCESS_SECRET,
@@ -57,7 +59,6 @@ export class AuthService {
         ...registerDto,
         password: hashedPassword,
       });
-
       const savedUser = await this.userRepository.save(user);
 
       // Trả về user không có password

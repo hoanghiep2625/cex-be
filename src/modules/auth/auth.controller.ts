@@ -50,7 +50,7 @@ export class AuthController {
 
     return await this.authService.refreshAccessToken(refreshToken);
   }
-  
+
   @Post('logout')
   async logout(@Res({ passthrough: true }) res: Response) {
     // Xoá cookie refresh token

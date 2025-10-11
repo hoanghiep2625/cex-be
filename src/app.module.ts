@@ -1,11 +1,12 @@
 import { Module } from '@nestjs/common';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
-import { UserModule } from './modules/user/user.module';
+import { UserModule } from './modules/users/user.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ConfigModule } from '@nestjs/config';
 import { typeOrmConfig } from './config/typeorm.config'; // Import config chung
+import { BalanceModule } from 'src/modules/balances/balance.module';
 
 @Module({
   imports: [
@@ -15,6 +16,7 @@ import { typeOrmConfig } from './config/typeorm.config'; // Import config chung
     TypeOrmModule.forRoot(typeOrmConfig),
     AuthModule,
     UserModule,
+    BalanceModule,
   ],
   controllers: [AppController],
   providers: [AppService],
