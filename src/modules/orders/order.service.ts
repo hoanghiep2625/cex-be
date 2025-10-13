@@ -4,7 +4,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, DataSource } from 'typeorm';
+import { Repository, DataSource, In } from 'typeorm';
 import {
   Order,
   OrderStatus,
@@ -16,6 +16,7 @@ import { Symbol } from '../symbols/entities/symbol.entity';
 import { Balance } from '../balances/entities/balance.entity';
 import { Asset } from '../assets/entities/asset.entity';
 import { RedisService } from '../redis/redis.service';
+import { OrderBookService } from '../redis/orderbook.service';
 
 @Injectable()
 export class OrderService {
@@ -24,12 +25,9 @@ export class OrderService {
     private readonly orderRepository: Repository<Order>,
     @InjectRepository(Symbol)
     private readonly symbolRepository: Repository<Symbol>,
-    // @InjectRepository(Balance)
-    // private readonly balanceRepository: Repository<Balance>,
-    // @InjectRepository(Asset)
-    // private readonly assetRepository: Repository<Asset>,
     private readonly dataSource: DataSource,
     private readonly redisService: RedisService,
+    private readonly orderBookService: OrderBookService,
   ) {}
 
   async createOrder(
@@ -109,7 +107,18 @@ export class OrderService {
       // 🎯 Get full order with relations để return & publish
       const fullOrder = await this.findOrderById(savedOrder.id);
 
-      // 📡 Publish order event to Redis
+      // � Add order to order book L2
+      await this.orderBookService.addOrder(fullOrder.symbol, {
+        orderId: fullOrder.id,
+        userId: parseInt(fullOrder.user_id),
+        price: fullOrder.price,
+        quantity: fullOrder.qty,
+        remainingQty: fullOrder.qty, // Initially same as qty
+        timestamp: fullOrder.created_at.getTime(),
+        side: fullOrder.side,
+      });
+
+      // �📡 Publish order event to Redis
       await this.publishOrderEvent('order.created', fullOrder);
 
       return fullOrder;
@@ -134,12 +143,6 @@ export class OrderService {
     return order;
   }
 
-  /**
-   * 📋 Get user's orders with filters
-   *
-   * @param user_id - User ID
-   * @param filters - Query filters (status, symbol, side, etc.)
-   */
   async getUserOrders(
     user_id: number,
     filters: {
@@ -157,7 +160,6 @@ export class OrderService {
       .leftJoinAndSelect('order.symbol_entity', 'symbol_entity')
       .where('order.user_id = :user_id', { user_id: user_id.toString() });
 
-    // 🔍 Apply filters
     if (filters.status?.length) {
       queryBuilder.andWhere('order.status IN (:...statuses)', {
         statuses: filters.status,
@@ -178,17 +180,14 @@ export class OrderService {
       queryBuilder.andWhere('order.type = :type', { type: filters.type });
     }
 
-    // 📊 Count total before pagination
     const total = await queryBuilder.getCount();
 
-    // 📄 Apply pagination
     if (filters.offset) {
       queryBuilder.skip(filters.offset);
     }
 
-    queryBuilder.take(filters.limit || 50); // Default 50 orders per page
+    queryBuilder.take(filters.limit || 50);
 
-    // 📅 Order by creation time (newest first)
     queryBuilder.orderBy('order.created_at', 'DESC');
 
     const orders = await queryBuilder.getMany();
@@ -196,12 +195,6 @@ export class OrderService {
     return { orders, total };
   }
 
-  /**
-   * 🔍 Get user's order by ID (with permission check)
-   *
-   * @param user_id - User ID
-   * @param order_id - Order UUID
-   */
   async getUserOrderById(user_id: number, order_id: string): Promise<Order> {
     const order = await this.orderRepository.findOne({
       where: {
@@ -218,19 +211,12 @@ export class OrderService {
     return order;
   }
 
-  /**
-   * ❌ Cancel user's order
-   *
-   * @param user_id - User ID
-   * @param order_id - Order UUID
-   */
   async cancelOrder(user_id: number, order_id: string): Promise<Order> {
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
     await queryRunner.startTransaction();
 
     try {
-      // 1️⃣ Find and validate order
       const order = await queryRunner.manager.findOne(Order, {
         where: {
           id: order_id,
@@ -243,7 +229,6 @@ export class OrderService {
         throw new NotFoundException('Order not found');
       }
 
-      // 2️⃣ Check if order can be canceled
       if (
         ![OrderStatus.NEW, OrderStatus.PARTIALLY_FILLED].includes(order.status)
       ) {
@@ -252,10 +237,8 @@ export class OrderService {
         );
       }
 
-      // 3️⃣ Calculate locked amount to release
       const { asset, lockedAmount } = await this.calculateLockedAmount(order);
 
-      // 4️⃣ Release locked balance
       await this.releaseLockedBalance(
         queryRunner,
         user_id,
@@ -263,7 +246,6 @@ export class OrderService {
         lockedAmount,
       );
 
-      // 5️⃣ Update order status
       await queryRunner.manager.update(Order, order.id, {
         status: OrderStatus.CANCELED,
         updated_at: new Date(),
@@ -271,10 +253,16 @@ export class OrderService {
 
       await queryRunner.commitTransaction();
 
-      // 6️⃣ Get updated order with relations
       const canceledOrder = await this.findOrderById(order.id);
 
-      // 📡 Publish cancel event
+      // 🗑️ Remove order from order book L2
+      await this.orderBookService.removeOrder(
+        canceledOrder.symbol,
+        canceledOrder.side,
+        canceledOrder.price,
+        canceledOrder.id,
+      );
+
       await this.publishOrderEvent('order.canceled', canceledOrder);
 
       return canceledOrder;
@@ -286,12 +274,6 @@ export class OrderService {
     }
   }
 
-  /**
-   * 📊 Get order history (filled + canceled)
-   *
-   * @param user_id - User ID
-   * @param filters - Query filters
-   */
   async getUserOrderHistory(
     user_id: number,
     filters: {
@@ -307,12 +289,6 @@ export class OrderService {
     });
   }
 
-  /**
-   * 🔄 Get active orders (NEW + PARTIALLY_FILLED)
-   *
-   * @param user_id - User ID
-   * @param filters - Query filters
-   */
   async getUserActiveOrders(
     user_id: number,
     filters: {
@@ -512,10 +488,67 @@ export class OrderService {
   }
 
   /**
-   * 💰 Calculate locked amount for order cancellation
-   *
-   * @param order - Order to calculate locked amount
+   * 🔄 Sync existing database orders to Redis order book
+   * This function should be called once to populate Redis with existing orders
    */
+  async syncOrdersToRedis(): Promise<{ synced: number; errors: number }> {
+    console.log('🔄 Starting sync of database orders to Redis...');
+
+    let synced = 0;
+    let errors = 0;
+
+    try {
+      // Get all active orders from database
+      const activeOrders = await this.orderRepository.find({
+        where: {
+          status: In([OrderStatus.NEW, OrderStatus.PARTIALLY_FILLED]),
+        },
+        relations: ['symbol_entity'],
+      });
+
+      console.log(`📊 Found ${activeOrders.length} active orders to sync`);
+
+      for (const order of activeOrders) {
+        try {
+          // Calculate remaining quantity (qty - filled_qty)
+          const remainingQty = (
+            parseFloat(order.qty) - parseFloat(order.filled_qty)
+          ).toString();
+
+          // Skip orders with no remaining quantity
+          if (parseFloat(remainingQty) <= 0) {
+            continue;
+          }
+
+          // Add to order book
+          await this.orderBookService.addOrder(order.symbol, {
+            orderId: order.id,
+            userId: parseInt(order.user_id),
+            price: order.price,
+            quantity: order.qty,
+            remainingQty: remainingQty,
+            timestamp: order.created_at.getTime(),
+            side: order.side,
+          });
+
+          synced++;
+          console.log(
+            `✅ Synced order ${order.id} (${order.symbol} ${order.side} ${order.price})`,
+          );
+        } catch (error) {
+          errors++;
+          console.error(`❌ Failed to sync order ${order.id}:`, error.message);
+        }
+      }
+
+      console.log(`🎉 Sync completed: ${synced} synced, ${errors} errors`);
+      return { synced, errors };
+    } catch (error) {
+      console.error('❌ Sync failed:', error);
+      throw error;
+    }
+  }
+
   private async calculateLockedAmount(
     order: Order,
   ): Promise<{ asset: Asset; lockedAmount: string }> {
@@ -583,217 +616,5 @@ export class OrderService {
       available: (currentAvailable + releaseAmount).toString(),
       locked: (currentLocked - releaseAmount).toString(),
     });
-  }
-
-  // ================================
-  // 🔐 ADMIN METHODS
-  // ================================
-
-  /**
-   * 📋 Admin: Get all orders in system
-   *
-   * @param filters - Query filters
-   */
-  async getAllSystemOrders(
-    filters: {
-      status?: OrderStatus[];
-      symbol?: string;
-      side?: OrderSide;
-      type?: OrderType;
-      limit?: number;
-      offset?: number;
-    } = {},
-  ): Promise<{ orders: Order[]; total: number }> {
-    const queryBuilder = this.orderRepository
-      .createQueryBuilder('order')
-      .leftJoinAndSelect('order.user', 'user')
-      .leftJoinAndSelect('order.symbol_entity', 'symbol_entity');
-
-    // 🔍 Apply filters
-    if (filters.status?.length) {
-      queryBuilder.andWhere('order.status IN (:...statuses)', {
-        statuses: filters.status,
-      });
-    }
-
-    if (filters.symbol) {
-      queryBuilder.andWhere('order.symbol = :symbol', {
-        symbol: filters.symbol,
-      });
-    }
-
-    if (filters.side) {
-      queryBuilder.andWhere('order.side = :side', { side: filters.side });
-    }
-
-    if (filters.type) {
-      queryBuilder.andWhere('order.type = :type', { type: filters.type });
-    }
-
-    // 📊 Count total before pagination
-    const total = await queryBuilder.getCount();
-
-    // 📄 Apply pagination
-    if (filters.offset) {
-      queryBuilder.skip(filters.offset);
-    }
-
-    queryBuilder.take(filters.limit || 50);
-
-    // 📅 Order by creation time (newest first)
-    queryBuilder.orderBy('order.created_at', 'DESC');
-
-    const orders = await queryBuilder.getMany();
-
-    return { orders, total };
-  }
-
-  /**
-   * ❌ Admin: Force cancel any order
-   *
-   * @param order_id - Order UUID
-   * @param admin_user_id - Admin user ID for audit
-   */
-  async adminCancelOrder(
-    order_id: string,
-    admin_user_id: number,
-  ): Promise<Order> {
-    const queryRunner = this.dataSource.createQueryRunner();
-    await queryRunner.connect();
-    await queryRunner.startTransaction();
-
-    try {
-      // 1️⃣ Find order (any user's order)
-      const order = await queryRunner.manager.findOne(Order, {
-        where: { id: order_id },
-        relations: ['symbol_entity', 'user'],
-      });
-
-      if (!order) {
-        throw new NotFoundException('Order not found');
-      }
-
-      // 2️⃣ Check if order can be canceled
-      if (
-        ![OrderStatus.NEW, OrderStatus.PARTIALLY_FILLED].includes(order.status)
-      ) {
-        throw new BadRequestException(
-          `Cannot cancel order with status: ${order.status}`,
-        );
-      }
-
-      // 3️⃣ Calculate locked amount to release
-      const { asset, lockedAmount } = await this.calculateLockedAmount(order);
-
-      // 4️⃣ Release locked balance
-      await this.releaseLockedBalance(
-        queryRunner,
-        parseInt(order.user_id),
-        asset.code,
-        lockedAmount,
-      );
-
-      // 5️⃣ Update order status
-      await queryRunner.manager.update(Order, order.id, {
-        status: OrderStatus.CANCELED,
-        updated_at: new Date(),
-      });
-
-      await queryRunner.commitTransaction();
-
-      // 6️⃣ Get updated order
-      const canceledOrder = await this.findOrderById(order.id);
-
-      // 📡 Publish admin cancel event
-      await this.publishOrderEvent('order.admin_canceled', {
-        ...canceledOrder,
-        admin_user_id, // Add admin info to event
-      } as any);
-
-      console.log(`🛡️ Admin ${admin_user_id} canceled order ${order_id}`);
-
-      return canceledOrder;
-    } catch (error) {
-      await queryRunner.rollbackTransaction();
-      throw error;
-    } finally {
-      await queryRunner.release();
-    }
-  }
-
-  /**
-   * 📊 Admin: Get system order statistics
-   *
-   * @param symbol - Optional symbol filter
-   * @param timeframe - Time period for stats
-   */
-  async getSystemOrderStats(
-    symbol?: string,
-    timeframe: '1h' | '24h' | '7d' | '30d' = '24h',
-  ): Promise<{
-    total_orders: number;
-    active_orders: number;
-    filled_orders: number;
-    canceled_orders: number;
-    total_volume: string;
-    by_status: Record<OrderStatus, number>;
-    by_side: Record<OrderSide, number>;
-  }> {
-    // 📅 Calculate time range
-    const now = new Date();
-    const timeRanges = {
-      '1h': new Date(now.getTime() - 60 * 60 * 1000),
-      '24h': new Date(now.getTime() - 24 * 60 * 60 * 1000),
-      '7d': new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000),
-      '30d': new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000),
-    };
-    const fromDate = timeRanges[timeframe];
-
-    const queryBuilder = this.orderRepository
-      .createQueryBuilder('order')
-      .where('order.created_at >= :fromDate', { fromDate });
-
-    if (symbol) {
-      queryBuilder.andWhere('order.symbol = :symbol', { symbol });
-    }
-
-    // 📊 Get all orders for calculations
-    const orders = await queryBuilder.getMany();
-
-    // 🧮 Calculate stats
-    const stats = {
-      total_orders: orders.length,
-      active_orders: orders.filter((o) =>
-        [OrderStatus.NEW, OrderStatus.PARTIALLY_FILLED].includes(o.status),
-      ).length,
-      filled_orders: orders.filter((o) => o.status === OrderStatus.FILLED)
-        .length,
-      canceled_orders: orders.filter((o) => o.status === OrderStatus.CANCELED)
-        .length,
-      total_volume: orders
-        .filter((o) => o.status === OrderStatus.FILLED)
-        .reduce(
-          (sum, o) =>
-            sum + parseFloat(o.filled_qty) * parseFloat(o.price || '0'),
-          0,
-        )
-        .toString(),
-      by_status: {} as Record<OrderStatus, number>,
-      by_side: {} as Record<OrderSide, number>,
-    };
-
-    // 📈 Count by status
-    Object.values(OrderStatus).forEach((status) => {
-      stats.by_status[status] = orders.filter(
-        (o) => o.status === status,
-      ).length;
-    });
-
-    // 📈 Count by side
-    Object.values(OrderSide).forEach((side) => {
-      stats.by_side[side] = orders.filter((o) => o.side === side).length;
-    });
-
-    return stats;
   }
 }

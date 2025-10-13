@@ -23,11 +23,6 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 export class OrderController {
   constructor(private readonly orderService: OrderService) {}
 
-  /**
-   * 📝 Create new order
-   *
-   * POST /orders
-   */
   @Post()
   @HttpCode(HttpStatus.CREATED)
   async createOrder(
@@ -35,6 +30,23 @@ export class OrderController {
     @Body(ValidationPipe) createOrderDto: CreateOrderDto,
   ): Promise<Order> {
     return this.orderService.createOrder(req.user.id, createOrderDto);
+  }
+
+  /**
+   *  Sync database orders to Redis order book
+   * POST /orders/sync-to-redis
+   */
+  @Post('sync-to-redis')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards() // Remove JWT guard for this endpoint
+  async syncOrdersToRedis() {
+    const result = await this.orderService.syncOrdersToRedis();
+
+    return {
+      success: true,
+      message: 'Database orders synced to Redis order book',
+      result,
+    };
   }
 
   /**
@@ -69,32 +81,6 @@ export class OrderController {
         has_next: result.orders.length === (filters.limit || 50),
       },
     };
-  }
-
-  /**
-   * 🔍 Get specific order by ID
-   *
-   * GET /orders/:id
-   */
-  @Get(':id')
-  async getOrderById(
-    @Request() req: any,
-    @Param('id', ParseUUIDPipe) orderId: string,
-  ): Promise<Order> {
-    return this.orderService.getUserOrderById(req.user.id, orderId);
-  }
-
-  /**
-   * ❌ Cancel order
-   *
-   * PUT /orders/:id/cancel
-   */
-  @Put(':id/cancel')
-  async cancelOrder(
-    @Request() req: any,
-    @Param('id', ParseUUIDPipe) orderId: string,
-  ): Promise<Order> {
-    return this.orderService.cancelOrder(req.user.id, orderId);
   }
 
   /**
@@ -161,5 +147,21 @@ export class OrderController {
         has_next: result.orders.length === (filters.limit || 50),
       },
     };
+  }
+
+  @Get(':id')
+  async getOrderById(
+    @Request() req: any,
+    @Param('id', ParseUUIDPipe) orderId: string,
+  ): Promise<Order> {
+    return this.orderService.getUserOrderById(req.user.id, orderId);
+  }
+
+  @Put(':id/cancel')
+  async cancelOrder(
+    @Request() req: any,
+    @Param('id', ParseUUIDPipe) orderId: string,
+  ): Promise<Order> {
+    return this.orderService.cancelOrder(req.user.id, orderId);
   }
 }
