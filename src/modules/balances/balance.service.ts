@@ -22,18 +22,18 @@ export class BalanceService {
   ) {}
 
   // Lấy tất cả balances của user
-  async getUserBalances(userId: number): Promise<Balance[]> {
+  async getUserBalances(user_id: number): Promise<Balance[]> {
     return await this.balanceRepository.find({
-      where: { userId },
+      where: { user_id },
       relations: ['asset'],
       order: { currency: 'ASC' },
     });
   }
 
   // Lấy balance của 1 currency
-  async getUserBalance(userId: number, currency: string): Promise<Balance> {
+  async getUserBalance(user_id: number, currency: string): Promise<Balance> {
     const balance = await this.balanceRepository.findOne({
-      where: { userId, currency },
+      where: { user_id, currency },
       relations: ['asset'],
     });
 
@@ -46,12 +46,12 @@ export class BalanceService {
 
   // Tạo balance mới cho user
   async createBalance(
-    userId: number,
+    user_id: number,
     createBalanceDto: CreateBalanceDto,
   ): Promise<Balance> {
     // Check if balance already exists
     const existingBalance = await this.balanceRepository.findOne({
-      where: { userId, currency: createBalanceDto.currency },
+      where: { user_id, currency: createBalanceDto.currency },
     });
 
     if (existingBalance) {
@@ -61,7 +61,7 @@ export class BalanceService {
     }
 
     const balance = this.balanceRepository.create({
-      userId,
+      user_id,
       currency: createBalanceDto.currency,
       available: createBalanceDto.available || '0',
       locked: '0',
@@ -71,10 +71,13 @@ export class BalanceService {
   }
 
   // Lock balance (khi đặt lệnh)
-  async lockBalance(userId: number, lockDto: LockBalanceDto): Promise<Balance> {
+  async lockBalance(
+    user_id: number,
+    lockDto: LockBalanceDto,
+  ): Promise<Balance> {
     return await this.dataSource.transaction(async (manager) => {
       const balance = await manager.findOne(Balance, {
-        where: { userId, currency: lockDto.currency },
+        where: { user_id, currency: lockDto.currency },
         lock: { mode: 'pessimistic_write' },
       });
 
@@ -101,12 +104,12 @@ export class BalanceService {
 
   // Unlock balance (khi hủy lệnh)
   async unlockBalance(
-    userId: number,
+    user_id: number,
     lockDto: LockBalanceDto,
   ): Promise<Balance> {
     return await this.dataSource.transaction(async (manager) => {
       const balance = await manager.findOne(Balance, {
-        where: { userId, currency: lockDto.currency },
+        where: { user_id, currency: lockDto.currency },
         lock: { mode: 'pessimistic_write' },
       });
 
@@ -133,47 +136,4 @@ export class BalanceService {
     });
   }
 
-  // Transfer giữa users (cho cùng currency)
-  async transferBalance(
-    fromUserId: number,
-    transferDto: TransferBalanceDto,
-  ): Promise<{ from: Balance; to: Balance }> {
-    return await this.dataSource.transaction(async (manager) => {
-      // Lock both balances
-      const fromBalance = await manager.findOne(Balance, {
-        where: { userId: fromUserId, currency: transferDto.currency },
-        lock: { mode: 'pessimistic_write' },
-      });
-
-      const toBalance = await manager.findOne(Balance, {
-        where: {
-          userId: parseInt(transferDto.recipientId),
-          currency: transferDto.currency,
-        },
-        lock: { mode: 'pessimistic_write' },
-      });
-
-      if (!fromBalance || !toBalance) {
-        throw new NotFoundException('Balance not found');
-      }
-
-      const fromAvailable = parseFloat(fromBalance.available);
-      const transferAmount = parseFloat(transferDto.amount);
-
-      if (fromAvailable < transferAmount) {
-        throw new BadRequestException('Insufficient balance');
-      }
-
-      // Update balances
-      fromBalance.available = (fromAvailable - transferAmount).toString();
-      toBalance.available = (
-        parseFloat(toBalance.available) + transferAmount
-      ).toString();
-
-      const savedFromBalance = await manager.save(fromBalance);
-      const savedToBalance = await manager.save(toBalance);
-
-      return { from: savedFromBalance, to: savedToBalance };
-    });
-  }
 }

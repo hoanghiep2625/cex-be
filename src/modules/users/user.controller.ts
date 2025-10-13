@@ -42,28 +42,4 @@ export class UserController {
   async getUserById(@Param('id', ParseIntPipe) id: number) {
     return await this.userService.getUserById(id);
   }
-
-  @Put('/:id/role')
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(UserRole.SUPER_ADMIN)
-  async updateUserRole(
-    @Param('id', ParseIntPipe) id: number,
-    @Body() updateRoleDto: { role: UserRole },
-  ) {
-    return await this.userService.updateUserRole(id, updateRoleDto.role);
-  }
-
-  @Put('/:id/toggle-active')
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN)
-  async toggleUserActive(@Param('id', ParseIntPipe) id: number) {
-    return await this.userService.toggleUserActive(id);
-  }
-
-  @Get('/admin/stats')
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN)
-  async getUserStats() {
-    return await this.userService.getUserStats();
-  }
 }

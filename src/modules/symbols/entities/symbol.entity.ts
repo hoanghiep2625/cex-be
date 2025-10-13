@@ -12,8 +12,8 @@ import { Asset } from '../../assets/entities/asset.entity';
 
 @Entity('symbols')
 @Index(['symbol'], { unique: true })
-@Index(['baseAsset'])
-@Index(['quoteAsset'])
+@Index(['base_asset'])
+@Index(['quote_asset'])
 @Index(['status'])
 export class Symbol {
   @PrimaryGeneratedColumn()
@@ -26,66 +26,58 @@ export class Symbol {
   symbol: string; // 'BTCUSDT', 'ETHUSDT'
 
   @Column({
-    name: 'base_asset',
     type: 'text',
   })
-  baseAsset: string; // 'BTC', 'ETH'
+  base_asset: string; // 'BTC', 'ETH'
 
   @Column({
-    name: 'quote_asset',
     type: 'text',
   })
-  quoteAsset: string; // 'USDT', 'BTC'
+  quote_asset: string; // 'USDT', 'BTC'
 
   @Column({
-    name: 'tick_size',
     type: 'numeric',
     precision: 20,
     scale: 8,
   })
-  tickSize: string; // '0.01' (bước nhảy giá)
+  tick_size: string; // '0.01' (bước nhảy giá)
 
   @Column({
-    name: 'lot_size',
     type: 'numeric',
     precision: 20,
     scale: 8,
   })
-  lotSize: string; // '0.0001' (bước nhảy khối lượng)
+  lot_size: string; // '0.0001' (bước nhảy khối lượng)
 
   @Column({
-    name: 'min_notional',
     type: 'numeric',
     precision: 20,
     scale: 8,
   })
-  minNotional: string; // '10' (giá trị lệnh tối thiểu)
+  min_notional: string; // '10' (giá trị lệnh tối thiểu)
 
   @Column({
-    name: 'max_notional',
     type: 'numeric',
     precision: 20,
     scale: 8,
     nullable: true,
   })
-  maxNotional?: string; // '1000000' (giá trị lệnh tối đa)
+  max_notional?: string; // '1000000' (giá trị lệnh tối đa)
 
   @Column({
-    name: 'min_qty',
     type: 'numeric',
     precision: 20,
     scale: 8,
   })
-  minQty: string; // '0.001' (số lượng tối thiểu)
+  min_qty: string; // '0.001' (số lượng tối thiểu)
 
   @Column({
-    name: 'max_qty',
     type: 'numeric',
     precision: 20,
     scale: 8,
     nullable: true,
   })
-  maxQty?: string; // '9000' (số lượng tối đa)
+  max_qty?: string; // '9000' (số lượng tối đa)
 
   @Column({
     type: 'varchar',
@@ -95,37 +87,35 @@ export class Symbol {
   status: string; // 'TRADING', 'DISABLED', 'MAINTENANCE'
 
   @Column({
-    name: 'is_spot_trading_allowed',
     type: 'boolean',
     default: true,
   })
-  isSpotTradingAllowed: boolean;
+  is_spot_trading_allowed: boolean;
 
   @Column({
-    name: 'is_margin_trading_allowed',
     type: 'boolean',
     default: false,
   })
-  isMarginTradingAllowed: boolean;
+  is_margin_trading_allowed: boolean;
 
   @CreateDateColumn({
     name: 'created_at',
     type: 'timestamptz',
   })
-  createdAt: Date;
+  created_at: Date;
 
   @UpdateDateColumn({
     name: 'updated_at',
     type: 'timestamptz',
   })
-  updatedAt: Date;
+  updated_at: Date;
 
   // Relations với Asset
   @ManyToOne(() => Asset)
   @JoinColumn({ name: 'base_asset', referencedColumnName: 'code' })
-  baseAssetEntity: Asset;
+  base_asset_entity: Asset;
 
   @ManyToOne(() => Asset)
   @JoinColumn({ name: 'quote_asset', referencedColumnName: 'code' })
-  quoteAssetEntity: Asset;
+  quote_asset_entity: Asset;
 }

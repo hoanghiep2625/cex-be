@@ -2,7 +2,6 @@ import { TypeOrmModuleOptions } from '@nestjs/typeorm';
 import { DataSource } from 'typeorm';
 import { config } from 'dotenv';
 
-// Load biến môi trường
 config();
 
 /**

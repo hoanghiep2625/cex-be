@@ -19,42 +19,42 @@ export class CreateSymbolDto {
   @IsString({ message: 'Base asset must be a string' })
   @IsNotEmpty({ message: 'Base asset is required' })
   @Matches(/^[A-Z]{2,10}$/, { message: 'Invalid base asset format' })
-  baseAsset: string; // 'BTC'
+  base_asset: string; // 'BTC'
 
   @IsString({ message: 'Quote asset must be a string' })
   @IsNotEmpty({ message: 'Quote asset is required' })
   @Matches(/^[A-Z]{2,10}$/, { message: 'Invalid quote asset format' })
-  quoteAsset: string; // 'USDT'
+  quote_asset: string; // 'USDT'
 
   @IsNumberString({}, { message: 'Tick size must be a valid number string' })
   @IsNotEmpty({ message: 'Tick size is required' })
   @Matches(/^\d*\.?\d+$/, { message: 'Invalid tick size format' })
-  tickSize: string; // '0.01'
+  tick_size: string; // '0.01'
 
   @IsNumberString({}, { message: 'Lot size must be a valid number string' })
   @IsNotEmpty({ message: 'Lot size is required' })
   @Matches(/^\d*\.?\d+$/, { message: 'Invalid lot size format' })
-  lotSize: string; // '0.0001'
+  lot_size: string; // '0.0001'
 
   @IsNumberString({}, { message: 'Min notional must be a valid number string' })
   @IsNotEmpty({ message: 'Min notional is required' })
   @Matches(/^\d*\.?\d+$/, { message: 'Invalid min notional format' })
-  minNotional: string; // '10'
+  min_notional: string; // '10'
 
   @IsOptional()
   @IsNumberString({}, { message: 'Max notional must be a valid number string' })
   @Matches(/^\d*\.?\d+$/, { message: 'Invalid max notional format' })
-  maxNotional?: string;
+  max_notional?: string;
 
   @IsNumberString({}, { message: 'Min qty must be a valid number string' })
   @IsNotEmpty({ message: 'Min qty is required' })
   @Matches(/^\d*\.?\d+$/, { message: 'Invalid min qty format' })
-  minQty: string; // '0.001'
+  min_qty: string; // '0.001'
 
   @IsOptional()
   @IsNumberString({}, { message: 'Max qty must be a valid number string' })
   @Matches(/^\d*\.?\d+$/, { message: 'Invalid max qty format' })
-  maxQty?: string;
+  max_qty?: string;
 
   @IsOptional()
   @IsString()
@@ -63,43 +63,43 @@ export class CreateSymbolDto {
 
   @IsOptional()
   @IsBoolean()
-  isSpotTradingAllowed?: boolean;
+  is_spot_trading_allowed?: boolean;
 
   @IsOptional()
   @IsBoolean()
-  isMarginTradingAllowed?: boolean;
+  is_margin_trading_allowed?: boolean;
 }
 
 export class UpdateSymbolDto {
   @IsOptional()
   @IsNumberString({}, { message: 'Tick size must be a valid number string' })
   @Matches(/^\d*\.?\d+$/, { message: 'Invalid tick size format' })
-  tickSize?: string;
+  tick_size?: string;
 
   @IsOptional()
   @IsNumberString({}, { message: 'Lot size must be a valid number string' })
   @Matches(/^\d*\.?\d+$/, { message: 'Invalid lot size format' })
-  lotSize?: string;
+  lot_size?: string;
 
   @IsOptional()
   @IsNumberString({}, { message: 'Min notional must be a valid number string' })
   @Matches(/^\d*\.?\d+$/, { message: 'Invalid min notional format' })
-  minNotional?: string;
+  min_notional?: string;
 
   @IsOptional()
   @IsNumberString({}, { message: 'Max notional must be a valid number string' })
   @Matches(/^\d*\.?\d+$/, { message: 'Invalid max notional format' })
-  maxNotional?: string;
+  max_notional?: string;
 
   @IsOptional()
   @IsNumberString({}, { message: 'Min qty must be a valid number string' })
   @Matches(/^\d*\.?\d+$/, { message: 'Invalid min qty format' })
-  minQty?: string;
+  min_qty?: string;
 
   @IsOptional()
   @IsNumberString({}, { message: 'Max qty must be a valid number string' })
   @Matches(/^\d*\.?\d+$/, { message: 'Invalid max qty format' })
-  maxQty?: string;
+  max_qty?: string;
 
   @IsOptional()
   @IsString()
@@ -108,21 +108,21 @@ export class UpdateSymbolDto {
 
   @IsOptional()
   @IsBoolean()
-  isSpotTradingAllowed?: boolean;
+  is_spot_trading_allowed?: boolean;
 
   @IsOptional()
   @IsBoolean()
-  isMarginTradingAllowed?: boolean;
+  is_margin_trading_allowed?: boolean;
 }
 
 export class SymbolFilterDto {
   @IsOptional()
   @IsString()
-  baseAsset?: string;
+  base_asset?: string;
 
   @IsOptional()
   @IsString()
-  quoteAsset?: string;
+  quote_asset?: string;
 
   @IsOptional()
   @IsString()
@@ -131,9 +131,9 @@ export class SymbolFilterDto {
 
   @IsOptional()
   @IsBoolean()
-  isSpotTradingAllowed?: boolean;
+  is_spot_trading_allowed?: boolean;
 
   @IsOptional()
   @IsBoolean()
-  isMarginTradingAllowed?: boolean;
+  is_margin_trading_allowed?: boolean;
 }

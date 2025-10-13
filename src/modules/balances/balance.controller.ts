@@ -14,6 +14,9 @@ import {
   TransferBalanceDto,
   LockBalanceDto,
 } from './dto/balance.dto';
+import { RolesGuard } from 'src/modules/auth/guards/roles.guard';
+import { UserRole } from 'src/modules/users/entities/user.entity';
+import { Roles } from 'src/modules/auth/decorators/roles.decorator';
 
 @Controller('balance')
 @UseGuards(JwtAuthGuard) // Require authentication for all routes
@@ -36,6 +39,8 @@ export class BalanceController {
   }
 
   @Post()
+  @UseGuards(JwtAuthGuard, RolesGuard) // TODO: Add admin role guard
+  @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN)
   async createBalance(
     @Request() req,
     @Body() createBalanceDto: CreateBalanceDto,
@@ -57,14 +62,5 @@ export class BalanceController {
   async unlockBalance(@Request() req, @Body() lockDto: LockBalanceDto) {
     // Unlock balance (hủy lệnh)
     return await this.balanceService.unlockBalance(req.user.id, lockDto);
-  }
-
-  @Post('/transfer')
-  async transferBalance(
-    @Request() req,
-    @Body() transferDto: TransferBalanceDto,
-  ) {
-    // Transfer balance cho user khác
-    return await this.balanceService.transferBalance(req.user.id, transferDto);
   }
 }

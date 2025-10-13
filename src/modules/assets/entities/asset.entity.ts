@@ -21,9 +21,10 @@ export class Asset {
   precision: number; // Số lẻ tối đa cho qty/balance
 
   @CreateDateColumn({
+    name: 'created_at',
     type: 'timestamptz',
   })
-  createdAt: Date;
+  created_at: Date;
 
   @OneToMany(() => Balance, (balance) => balance.asset)
   balances: Balance[];

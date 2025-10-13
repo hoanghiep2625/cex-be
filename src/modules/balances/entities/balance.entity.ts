@@ -15,8 +15,8 @@ import { Asset } from '../../assets/entities/asset.entity';
 @Entity('balances')
 @Check(`available >= 0`) // available không âm
 @Check(`locked >= 0`) // locked không âm
-@Index('idx_balances_user', ['userId']) // Index cho query performance
-@Index(['userId', 'currency'], { unique: true }) // 1 user = 1 balance per currency
+@Index('idx_balances_user', ['user_id']) // Index cho query performance
+@Index(['user_id', 'currency'], { unique: true }) // 1 user = 1 balance per currency
 export class Balance {
   @PrimaryGeneratedColumn('increment', { type: 'bigint' })
   id: string; // BIGSERIAL -> string để tránh overflow
@@ -25,7 +25,7 @@ export class Balance {
     name: 'user_id',
     type: 'bigint',
   })
-  userId: number; // Foreign key
+  user_id: number; // Foreign key
 
   @Column({
     type: 'text',
@@ -52,13 +52,13 @@ export class Balance {
     name: 'created_at',
     type: 'timestamptz',
   })
-  createdAt: Date;
+  created_at: Date;
 
   @UpdateDateColumn({
     name: 'updated_at',
     type: 'timestamptz',
   })
-  updatedAt: Date; // Auto trigger trong DB
+  updated_at: Date; // Auto trigger trong DB
 
   // Relations
   @ManyToOne(() => User, { onDelete: 'CASCADE' })

@@ -33,7 +33,7 @@ export class TransferBalanceDto {
   amount: string; // Amount to transfer
 
   @IsNumberString({}, { message: 'Recipient ID must be a number' })
-  recipientId: string; // Target user ID
+  recipient_id: string; // Target user ID
 }
 
 export class LockBalanceDto {

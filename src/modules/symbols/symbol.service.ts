@@ -6,11 +6,7 @@ import {
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Symbol } from './entities/symbol.entity';
-import {
-  CreateSymbolDto,
-  UpdateSymbolDto,
-  SymbolFilterDto,
-} from './dto/symbol.dto';
+import { CreateSymbolDto, SymbolFilterDto } from './dto/symbol.dto';
 
 @Injectable()
 export class SymbolService {
@@ -19,22 +15,21 @@ export class SymbolService {
     private readonly symbolRepository: Repository<Symbol>,
   ) {}
 
-  // 📈 Lấy tất cả symbols với filter
   async getAllSymbols(filters?: SymbolFilterDto): Promise<Symbol[]> {
     const queryBuilder = this.symbolRepository
       .createQueryBuilder('symbol')
-      .leftJoinAndSelect('symbol.baseAssetEntity', 'baseAsset')
-      .leftJoinAndSelect('symbol.quoteAssetEntity', 'quoteAsset');
+      .leftJoinAndSelect('symbol.base_asset_entity', 'base_asset')
+      .leftJoinAndSelect('symbol.quote_asset_entity', 'quote_asset');
 
-    if (filters?.baseAsset) {
-      queryBuilder.andWhere('symbol.baseAsset = :baseAsset', {
-        baseAsset: filters.baseAsset.toUpperCase(),
+    if (filters?.base_asset) {
+      queryBuilder.andWhere('symbol.base_asset = :base_asset', {
+        base_asset: filters.base_asset.toUpperCase(),
       });
     }
 
-    if (filters?.quoteAsset) {
-      queryBuilder.andWhere('symbol.quoteAsset = :quoteAsset', {
-        quoteAsset: filters.quoteAsset.toUpperCase(),
+    if (filters?.quote_asset) {
+      queryBuilder.andWhere('symbol.quote_asset = :quote_asset', {
+        quote_asset: filters.quote_asset.toUpperCase(),
       });
     }
 
@@ -44,20 +39,20 @@ export class SymbolService {
       });
     }
 
-    if (filters?.isSpotTradingAllowed !== undefined) {
+    if (filters?.is_spot_trading_allowed !== undefined) {
       queryBuilder.andWhere(
-        'symbol.isSpotTradingAllowed = :isSpotTradingAllowed',
+        'symbol.is_spot_trading_allowed = :isSpotTradingAllowed',
         {
-          isSpotTradingAllowed: filters.isSpotTradingAllowed,
+          isSpotTradingAllowed: filters.is_spot_trading_allowed,
         },
       );
     }
 
-    if (filters?.isMarginTradingAllowed !== undefined) {
+    if (filters?.is_margin_trading_allowed !== undefined) {
       queryBuilder.andWhere(
-        'symbol.isMarginTradingAllowed = :isMarginTradingAllowed',
+        'symbol.is_margin_trading_allowed = :isMarginTradingAllowed',
         {
-          isMarginTradingAllowed: filters.isMarginTradingAllowed,
+          isMarginTradingAllowed: filters.is_margin_trading_allowed,
         },
       );
     }
@@ -65,48 +60,6 @@ export class SymbolService {
     return await queryBuilder.orderBy('symbol.symbol', 'ASC').getMany();
   }
 
-  // 📈 Lấy symbol theo tên
-  async getSymbolBySymbol(symbol: string): Promise<Symbol> {
-    const symbolEntity = await this.symbolRepository.findOne({
-      where: { symbol: symbol.toUpperCase() },
-      relations: ['baseAssetEntity', 'quoteAssetEntity'],
-    });
-
-    if (!symbolEntity) {
-      throw new NotFoundException(`Symbol ${symbol} not found`);
-    }
-
-    return symbolEntity;
-  }
-
-  // 📈 Lấy symbols theo base asset
-  async getSymbolsByBaseAsset(baseAsset: string): Promise<Symbol[]> {
-    return await this.symbolRepository.find({
-      where: { baseAsset: baseAsset.toUpperCase() },
-      relations: ['baseAssetEntity', 'quoteAssetEntity'],
-      order: { symbol: 'ASC' },
-    });
-  }
-
-  // 📈 Lấy symbols theo quote asset
-  async getSymbolsByQuoteAsset(quoteAsset: string): Promise<Symbol[]> {
-    return await this.symbolRepository.find({
-      where: { quoteAsset: quoteAsset.toUpperCase() },
-      relations: ['baseAssetEntity', 'quoteAssetEntity'],
-      order: { symbol: 'ASC' },
-    });
-  }
-
-  // 📈 Lấy symbols theo status
-  async getSymbolsByStatus(status: string): Promise<Symbol[]> {
-    return await this.symbolRepository.find({
-      where: { status: status.toUpperCase() },
-      relations: ['baseAssetEntity', 'quoteAssetEntity'],
-      order: { symbol: 'ASC' },
-    });
-  }
-
-  // 📈 Tạo symbol mới
   async createSymbol(createSymbolDto: CreateSymbolDto): Promise<Symbol> {
     // Check if symbol already exists
     const existingSymbol = await this.symbolRepository.findOne({
@@ -122,58 +75,21 @@ export class SymbolService {
     // Tạo symbol object với field names chuẩn
     const symbolData = {
       symbol: createSymbolDto.symbol.toUpperCase(),
-      baseAsset: createSymbolDto.baseAsset.toUpperCase(),
-      quoteAsset: createSymbolDto.quoteAsset.toUpperCase(),
-      tickSize: createSymbolDto.tickSize,
-      lotSize: createSymbolDto.lotSize,
-      minNotional: createSymbolDto.minNotional,
-      maxNotional: createSymbolDto.maxNotional,
-      minQty: createSymbolDto.minQty,
-      maxQty: createSymbolDto.maxQty,
+      base_asset: createSymbolDto.base_asset.toUpperCase(),
+      quote_asset: createSymbolDto.quote_asset.toUpperCase(),
+      tick_size: createSymbolDto.tick_size,
+      lot_size: createSymbolDto.lot_size,
+      min_notional: createSymbolDto.min_notional,
+      max_notional: createSymbolDto.max_notional,
+      min_qty: createSymbolDto.min_qty,
+      max_qty: createSymbolDto.max_qty,
       status: createSymbolDto.status || 'TRADING',
-      isSpotTradingAllowed: createSymbolDto.isSpotTradingAllowed ?? true,
-      isMarginTradingAllowed: createSymbolDto.isMarginTradingAllowed ?? false,
+      is_spot_trading_allowed: createSymbolDto.is_spot_trading_allowed ?? true,
+      is_margin_trading_allowed:
+        createSymbolDto.is_margin_trading_allowed ?? false,
     };
 
     const newSymbol = this.symbolRepository.create(symbolData);
     return await this.symbolRepository.save(newSymbol);
-  }
-
-  // 📈 Update symbol
-  async updateSymbol(
-    symbol: string,
-    updateSymbolDto: UpdateSymbolDto,
-  ): Promise<Symbol> {
-    const symbolEntity = await this.getSymbolBySymbol(symbol);
-
-    Object.assign(symbolEntity, updateSymbolDto);
-    return await this.symbolRepository.save(symbolEntity);
-  }
-
-  // 📈 Xóa symbol
-  async deleteSymbol(symbol: string): Promise<void> {
-    const symbolEntity = await this.getSymbolBySymbol(symbol);
-    await this.symbolRepository.remove(symbolEntity);
-  }
-
-  // 📈 Lấy symbols đang trading
-  async getTradingSymbols(): Promise<Symbol[]> {
-    return await this.symbolRepository.find({
-      where: {
-        status: 'TRADING',
-        isSpotTradingAllowed: true,
-      },
-      relations: ['baseAssetEntity', 'quoteAssetEntity'],
-      order: { symbol: 'ASC' },
-    });
-  }
-
-  // 📈 Toggle symbol status
-  async toggleSymbolStatus(symbol: string): Promise<Symbol> {
-    const symbolEntity = await this.getSymbolBySymbol(symbol);
-
-    symbolEntity.status =
-      symbolEntity.status === 'TRADING' ? 'DISABLED' : 'TRADING';
-    return await this.symbolRepository.save(symbolEntity);
   }
 }

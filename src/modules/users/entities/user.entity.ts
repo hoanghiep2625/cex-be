@@ -42,11 +42,11 @@ export class User {
     type: 'boolean',
     default: true,
   })
-  isActive: boolean; // Tài khoản có active không
+  is_active: boolean; // Tài khoản có active không
 
-  @CreateDateColumn() // Tự động set thời gian tạo record
-  createdAt: Date;
+  @CreateDateColumn({ name: 'created_at' }) // Tự động set thời gian tạo record
+  created_at: Date;
 
-  @UpdateDateColumn() // Tự động update thời gian khi record được sửa
-  updatedAt: Date;
+  @UpdateDateColumn({ name: 'updated_at' }) // Tự động update thời gian khi record được sửa
+  updated_at: Date;
 }

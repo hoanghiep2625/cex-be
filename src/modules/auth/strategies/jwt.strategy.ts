@@ -19,14 +19,14 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
   }
 
   async validate(payload: any) {
-    const { sub: userId } = payload;
-    const user = await this.userRepository.findOne({ where: { id: userId } });
+    const { sub: user_id } = payload;
+    const user = await this.userRepository.findOne({ where: { id: user_id } });
 
     if (!user) {
       throw new UnauthorizedException('Token không hợp lệ');
     }
 
-    if (!user.isActive) {
+    if (!user.is_active) {
       throw new UnauthorizedException('Tài khoản đã bị vô hiệu hóa');
     }
 

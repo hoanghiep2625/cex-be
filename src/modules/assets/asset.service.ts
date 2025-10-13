@@ -64,20 +64,4 @@ export class AssetService {
     return await this.assetRepository.save(asset);
   }
 
-  // 💰 Update asset
-  async updateAsset(
-    code: string,
-    updateAssetDto: UpdateAssetDto,
-  ): Promise<Asset> {
-    const asset = await this.getAssetByCode(code);
-
-    Object.assign(asset, updateAssetDto);
-    return await this.assetRepository.save(asset);
-  }
-
-  // 💰 Xóa asset
-  async deleteAsset(code: string): Promise<void> {
-    const asset = await this.getAssetByCode(code);
-    await this.assetRepository.remove(asset);
-  }
 }
