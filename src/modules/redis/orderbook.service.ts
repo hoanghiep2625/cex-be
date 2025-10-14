@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { RedisService } from './redis.service';
+import Decimal from 'decimal.js';
 
 export interface OrderBookEntry {
   orderId: string;
@@ -48,6 +49,11 @@ export class OrderBookService {
     const side = order.side === 'BUY' ? 'bids' : 'asks'; // Map BUY->bids, SELL->asks
     const price = order.price;
 
+    // Validate price is not null/undefined
+    if (!price || price === 'null' || price === 'undefined') {
+      throw new Error(`Invalid price: ${price} for order ${order.orderId}`);
+    }
+
     // Keys
     const priceListKey = `orderbook:${symbol}:${side}`; // ZSet cho price levels
     const orderHashKey = `orderbook:${symbol}:${side}:${price}`; // Hash cho orders tại price
@@ -67,7 +73,13 @@ export class OrderBookService {
 
     // 2. Update total quantity tại price level (ZSet)
     const totalQty = await this.getTotalQuantityAtPrice(symbol, side, price);
-    await client.zadd(priceListKey, parseFloat(price), price);
+    const priceDecimal = new Decimal(price);
+    if (priceDecimal.isNaN()) {
+      throw new Error(
+        `Invalid price format: ${price} for order ${order.orderId}`,
+      );
+    }
+    await client.zadd(priceListKey, priceDecimal.toNumber(), price);
 
     console.log(
       `📊 Added ${side} order ${order.orderId} at ${price} for ${symbol}`,
@@ -106,9 +118,13 @@ export class OrderBookService {
       await client.del(orderHashKey); // Cleanup empty hash
     } else {
       // Update quantity trong ZSet
+      const priceDecimal = new Decimal(price);
+      if (priceDecimal.isNaN()) {
+        throw new Error(`Invalid price format: ${price} for order ${orderId}`);
+      }
       await client.zadd(
         priceListKey,
-        parseFloat(price),
+        priceDecimal.toNumber(),
         `${price}:${totalQty}`,
       );
     }
@@ -281,9 +297,13 @@ export class OrderBookService {
 
     // Update total quantity at price level
     const totalQty = await this.getTotalQuantityAtPrice(symbol, sideKey, price);
+    const priceDecimal = new Decimal(price);
+    if (priceDecimal.isNaN()) {
+      throw new Error(`Invalid price format: ${price} for order ${orderId}`);
+    }
     await client.zadd(
       `orderbook:${symbol}:${sideKey}`,
-      parseFloat(price),
+      priceDecimal.toNumber(),
       `${price}:${totalQty}`,
     );
 
@@ -309,13 +329,13 @@ export class OrderBookService {
 
     const orderData = await client.hgetall(orderHashKey);
 
-    let totalQty = 0;
+    let totalQty = new Decimal(0);
     for (const data of Object.values(orderData)) {
       const parsed = JSON.parse(data);
-      totalQty += parseFloat(parsed.remainingQty);
+      totalQty = totalQty.plus(new Decimal(parsed.remainingQty));
     }
 
-    return totalQty;
+    return totalQty.toNumber();
   }
 
   private async getOrderCountAtPrice(
@@ -368,31 +388,31 @@ export class OrderBookService {
     const bidData = await client.zrange(`orderbook:${symbol}:bids`, 0, -1);
     const askData = await client.zrange(`orderbook:${symbol}:asks`, 0, -1);
 
-    let totalBidVolume = 0;
-    let totalAskVolume = 0;
+    let totalBidVolume = new Decimal(0);
+    let totalAskVolume = new Decimal(0);
 
     bidData.forEach((item) => {
       const [, quantity] = item.split(':');
-      totalBidVolume += parseFloat(quantity);
+      totalBidVolume = totalBidVolume.plus(new Decimal(quantity));
     });
 
     askData.forEach((item) => {
       const [, quantity] = item.split(':');
-      totalAskVolume += parseFloat(quantity);
+      totalAskVolume = totalAskVolume.plus(new Decimal(quantity));
     });
 
     // Calculate spread
     const { bestBid, bestAsk } = await this.getBestBidAsk(symbol);
     let spread = null;
     if (bestBid && bestAsk) {
-      spread = parseFloat(bestAsk) - parseFloat(bestBid);
+      spread = new Decimal(bestAsk).minus(new Decimal(bestBid)).toNumber();
     }
 
     return {
       bidLevels,
       askLevels,
-      totalBidVolume,
-      totalAskVolume,
+      totalBidVolume: totalBidVolume.toNumber(),
+      totalAskVolume: totalAskVolume.toNumber(),
       spread,
     };
   }

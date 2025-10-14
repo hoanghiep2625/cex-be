@@ -18,6 +18,7 @@ import { Asset } from '../assets/entities/asset.entity';
 import { RedisService } from '../redis/redis.service';
 import { OrderBookService } from '../redis/orderbook.service';
 import { WalletType } from '../balances/entities/balance.entity';
+import Decimal from 'decimal.js';
 
 @Injectable()
 export class OrderService {
@@ -109,15 +110,18 @@ export class OrderService {
       const fullOrder = await this.findOrderById(savedOrder.id);
 
       // � Add order to order book L2
-      await this.orderBookService.addOrder(fullOrder.symbol, {
-        orderId: fullOrder.id,
-        userId: parseInt(fullOrder.user_id),
-        price: fullOrder.price,
-        quantity: fullOrder.qty,
-        remainingQty: fullOrder.qty, // Initially same as qty
-        timestamp: fullOrder.created_at.getTime(),
-        side: fullOrder.side,
-      });
+      // Chỉ thêm LIMIT orders vào orderbook (MARKET orders sẽ match ngay)
+      if (fullOrder.type === OrderType.LIMIT && fullOrder.price) {
+        await this.orderBookService.addOrder(fullOrder.symbol, {
+          orderId: fullOrder.id,
+          userId: parseInt(fullOrder.user_id),
+          price: fullOrder.price,
+          quantity: fullOrder.qty,
+          remainingQty: fullOrder.qty, // Initially same as qty
+          timestamp: fullOrder.created_at.getTime(),
+          side: fullOrder.side,
+        });
+      }
 
       // �📡 Publish order event to Redis
       await this.publishOrderEvent('order.created', fullOrder);
@@ -309,27 +313,34 @@ export class OrderService {
     orderDto: CreateOrderDto,
     symbol: Symbol,
   ): void {
-    const qty = parseFloat(orderDto.qty);
-    const price = orderDto.price ? parseFloat(orderDto.price) : null;
+    const qty = new Decimal(orderDto.qty);
+    const price = orderDto.price ? new Decimal(orderDto.price) : null;
 
     // Validate quantity
-    if (qty <= 0) {
+    if (qty.lte(0)) {
       throw new BadRequestException('Quantity must be positive');
     }
 
-    if (qty < parseFloat(symbol.min_qty)) {
+    const minQty = new Decimal(symbol.min_qty);
+    if (qty.lt(minQty)) {
       throw new BadRequestException(
         `Quantity must be at least ${symbol.min_qty}`,
       );
     }
 
-    if (symbol.max_qty && qty > parseFloat(symbol.max_qty)) {
-      throw new BadRequestException(`Quantity cannot exceed ${symbol.max_qty}`);
+    if (symbol.max_qty) {
+      const maxQty = new Decimal(symbol.max_qty);
+      if (qty.gt(maxQty)) {
+        throw new BadRequestException(
+          `Quantity cannot exceed ${symbol.max_qty}`,
+        );
+      }
     }
 
     // Validate lot size
-    const lotSize = parseFloat(symbol.lot_size);
-    if ((qty * Math.pow(10, 8)) % (lotSize * Math.pow(10, 8)) !== 0) {
+    const lotSize = new Decimal(symbol.lot_size);
+    const remainder = qty.mod(lotSize);
+    if (!remainder.eq(0)) {
       throw new BadRequestException(
         `Quantity must be multiple of ${symbol.lot_size}`,
       );
@@ -337,30 +348,35 @@ export class OrderService {
 
     // Validate price for LIMIT orders
     if (orderDto.type === OrderType.LIMIT) {
-      if (!price || price <= 0) {
+      if (!price || price.lte(0)) {
         throw new BadRequestException('Price is required for LIMIT orders');
       }
 
       // Validate tick size
-      const tickSize = parseFloat(symbol.tick_size);
-      if ((price * Math.pow(10, 8)) % (tickSize * Math.pow(10, 8)) !== 0) {
+      const tickSize = new Decimal(symbol.tick_size);
+      const priceRemainder = price.mod(tickSize);
+      if (!priceRemainder.eq(0)) {
         throw new BadRequestException(
           `Price must be multiple of ${symbol.tick_size}`,
         );
       }
 
       // Validate notional value
-      const notional = qty * price;
-      if (notional < parseFloat(symbol.min_notional)) {
+      const notional = qty.times(price);
+      const minNotional = new Decimal(symbol.min_notional);
+      if (notional.lt(minNotional)) {
         throw new BadRequestException(
           `Order value must be at least ${symbol.min_notional}`,
         );
       }
 
-      if (symbol.max_notional && notional > parseFloat(symbol.max_notional)) {
-        throw new BadRequestException(
-          `Order value cannot exceed ${symbol.max_notional}`,
-        );
+      if (symbol.max_notional) {
+        const maxNotional = new Decimal(symbol.max_notional);
+        if (notional.gt(maxNotional)) {
+          throw new BadRequestException(
+            `Order value cannot exceed ${symbol.max_notional}`,
+          );
+        }
       }
     }
   }
@@ -369,18 +385,18 @@ export class OrderService {
     orderDto: CreateOrderDto,
     symbol: Symbol,
   ): { asset: Asset; requiredAmount: string } {
-    const qty = parseFloat(orderDto.qty);
+    const qty = new Decimal(orderDto.qty);
 
     if (orderDto.side === OrderSide.BUY) {
       // For BUY orders, need quote asset (e.g., USDT for BTCUSDT)
       const price =
         orderDto.type === OrderType.MARKET
-          ? parseFloat(symbol.max_notional || '100000') / qty // Estimate using max notional
-          : parseFloat(orderDto.price);
+          ? new Decimal(symbol.max_notional || '100000').div(qty) // Estimate using max notional
+          : new Decimal(orderDto.price);
 
       return {
         asset: symbol.quote_asset_entity,
-        requiredAmount: (qty * price).toString(),
+        requiredAmount: qty.times(price).toString(),
       };
     } else {
       // For SELL orders, need base asset (e.g., BTC for BTCUSDT)
@@ -408,10 +424,10 @@ export class OrderService {
       );
     }
 
-    const available = parseFloat(balance.available);
-    const required = parseFloat(requiredAmount);
+    const available = new Decimal(balance.available);
+    const required = new Decimal(requiredAmount);
 
-    if (available < required) {
+    if (available.lt(required)) {
       throw new BadRequestException(
         `Insufficient ${assetCode} balance in spot wallet`,
       );
@@ -419,8 +435,8 @@ export class OrderService {
 
     // Reserve the balance
     await queryRunner.manager.update(Balance, balance.id, {
-      available: (available - required).toString(),
-      locked: (parseFloat(balance.locked) + required).toString(),
+      available: available.minus(required).toString(),
+      locked: new Decimal(balance.locked).plus(required).toString(),
     });
   }
 
@@ -517,12 +533,12 @@ export class OrderService {
       for (const order of activeOrders) {
         try {
           // Calculate remaining quantity (qty - filled_qty)
-          const remainingQty = (
-            parseFloat(order.qty) - parseFloat(order.filled_qty)
-          ).toString();
+          const remainingQty = new Decimal(order.qty).minus(
+            new Decimal(order.filled_qty),
+          );
 
           // Skip orders with no remaining quantity
-          if (parseFloat(remainingQty) <= 0) {
+          if (remainingQty.lte(0)) {
             continue;
           }
 
@@ -532,7 +548,7 @@ export class OrderService {
             userId: parseInt(order.user_id),
             price: order.price,
             quantity: order.qty,
-            remainingQty: remainingQty,
+            remainingQty: remainingQty.toString(),
             timestamp: order.created_at.getTime(),
             side: order.side,
           });
@@ -568,11 +584,13 @@ export class OrderService {
       throw new BadRequestException(`Symbol ${order.symbol} not found`);
     }
 
-    const remainingQty = parseFloat(order.qty) - parseFloat(order.filled_qty);
+    const remainingQty = new Decimal(order.qty).minus(
+      new Decimal(order.filled_qty),
+    );
 
     if (order.side === OrderSide.BUY) {
       // For BUY orders, locked quote asset (e.g., USDT)
-      const lockedAmount = remainingQty * parseFloat(order.price);
+      const lockedAmount = remainingQty.times(new Decimal(order.price));
       return {
         asset: symbol.quote_asset_entity,
         lockedAmount: lockedAmount.toString(),
@@ -611,12 +629,12 @@ export class OrderService {
       );
     }
 
-    const releaseAmount = parseFloat(amount);
-    const currentLocked = parseFloat(balance.locked);
-    const currentAvailable = parseFloat(balance.available);
+    const releaseAmount = new Decimal(amount);
+    const currentLocked = new Decimal(balance.locked);
+    const currentAvailable = new Decimal(balance.available);
 
     // Validate we have enough locked balance
-    if (currentLocked < releaseAmount) {
+    if (currentLocked.lt(releaseAmount)) {
       throw new BadRequestException(
         `Insufficient locked ${assetCode} balance in spot wallet`,
       );
@@ -624,8 +642,8 @@ export class OrderService {
 
     // Release the balance
     await queryRunner.manager.update(Balance, balance.id, {
-      available: (currentAvailable + releaseAmount).toString(),
-      locked: (currentLocked - releaseAmount).toString(),
+      available: currentAvailable.plus(releaseAmount).toString(),
+      locked: currentLocked.minus(releaseAmount).toString(),
     });
   }
 }

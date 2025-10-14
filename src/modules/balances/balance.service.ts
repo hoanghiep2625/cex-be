@@ -12,6 +12,7 @@ import {
   LockBalanceDto,
   TransferBetweenWalletsDto,
 } from './dto/balance.dto';
+import Decimal from 'decimal.js';
 
 @Injectable()
 export class BalanceService {
@@ -106,16 +107,18 @@ export class BalanceService {
         );
       }
 
-      const availableNum = parseFloat(balance.available);
-      const lockAmount = parseFloat(lockDto.amount);
+      const availableDecimal = new Decimal(balance.available);
+      const lockAmountDecimal = new Decimal(lockDto.amount);
 
-      if (availableNum < lockAmount) {
+      if (availableDecimal.lt(lockAmountDecimal)) {
         throw new BadRequestException('Insufficient available balance');
       }
 
       // Move from available to locked
-      balance.available = (availableNum - lockAmount).toString();
-      balance.locked = (parseFloat(balance.locked) + lockAmount).toString();
+      balance.available = availableDecimal.minus(lockAmountDecimal).toString();
+      balance.locked = new Decimal(balance.locked)
+        .plus(lockAmountDecimal)
+        .toString();
 
       return await manager.save(balance);
     });
@@ -140,18 +143,18 @@ export class BalanceService {
         );
       }
 
-      const lockedNum = parseFloat(balance.locked);
-      const unlockAmount = parseFloat(lockDto.amount);
+      const lockedDecimal = new Decimal(balance.locked);
+      const unlockAmountDecimal = new Decimal(lockDto.amount);
 
-      if (lockedNum < unlockAmount) {
+      if (lockedDecimal.lt(unlockAmountDecimal)) {
         throw new BadRequestException('Insufficient locked balance');
       }
 
       // Move from locked to available
-      balance.locked = (lockedNum - unlockAmount).toString();
-      balance.available = (
-        parseFloat(balance.available) + unlockAmount
-      ).toString();
+      balance.locked = lockedDecimal.minus(unlockAmountDecimal).toString();
+      balance.available = new Decimal(balance.available)
+        .plus(unlockAmountDecimal)
+        .toString();
 
       return await manager.save(balance);
     });
@@ -185,10 +188,10 @@ export class BalanceService {
         );
       }
 
-      const availableAmount = parseFloat(fromBalance.available);
-      const transferAmount = parseFloat(amount);
+      const availableAmount = new Decimal(fromBalance.available);
+      const transferAmount = new Decimal(amount);
 
-      if (availableAmount < transferAmount) {
+      if (availableAmount.lt(transferAmount)) {
         throw new BadRequestException(
           `Insufficient ${currency} balance in ${from_wallet_type} wallet`,
         );
@@ -214,13 +217,13 @@ export class BalanceService {
 
       // Update balances
       await manager.update(Balance, fromBalance.id, {
-        available: (availableAmount - transferAmount).toString(),
+        available: availableAmount.minus(transferAmount).toString(),
       });
 
       await manager.update(Balance, toBalance.id, {
-        available: (
-          parseFloat(toBalance.available) + transferAmount
-        ).toString(),
+        available: new Decimal(toBalance.available)
+          .plus(transferAmount)
+          .toString(),
       });
 
       // Return updated balances
