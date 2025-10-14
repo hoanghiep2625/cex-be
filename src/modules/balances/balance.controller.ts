@@ -11,8 +11,8 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { BalanceService } from './balance.service';
 import {
   CreateBalanceDto,
-  TransferBalanceDto,
   LockBalanceDto,
+  TransferBetweenWalletsDto,
 } from './dto/balance.dto';
 import { RolesGuard } from 'src/modules/auth/guards/roles.guard';
 import { UserRole } from 'src/modules/users/entities/user.entity';
@@ -62,5 +62,17 @@ export class BalanceController {
   async unlockBalance(@Request() req, @Body() lockDto: LockBalanceDto) {
     // Unlock balance (hủy lệnh)
     return await this.balanceService.unlockBalance(req.user.id, lockDto);
+  }
+
+  @Post('/transfer')
+  async transferBetweenWallets(
+    @Request() req,
+    @Body() transferDto: TransferBetweenWalletsDto,
+  ) {
+    // Chuyển balance từ ví này sang ví khác
+    return await this.balanceService.transferBetweenWallets(
+      req.user.id,
+      transferDto,
+    );
   }
 }

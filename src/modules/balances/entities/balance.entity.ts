@@ -12,11 +12,17 @@ import {
 import { User } from '../../users/entities/user.entity';
 import { Asset } from '../../assets/entities/asset.entity';
 
+export enum WalletType {
+  SPOT = 'spot',
+  FUTURE = 'future',
+  FUNDING = 'funding',
+}
+
 @Entity('balances')
 @Check(`available >= 0`) // available không âm
 @Check(`locked >= 0`) // locked không âm
 @Index('idx_balances_user', ['user_id']) // Index cho query performance
-@Index(['user_id', 'currency'], { unique: true }) // 1 user = 1 balance per currency
+@Index(['user_id', 'currency', 'wallet_type'], { unique: true }) // 1 user = 1 balance per currency per wallet type
 export class Balance {
   @PrimaryGeneratedColumn('increment', { type: 'bigint' })
   id: string; // BIGSERIAL -> string để tránh overflow
@@ -31,6 +37,13 @@ export class Balance {
     type: 'text',
   })
   currency: string; // 'BTC', 'ETH', 'USDT' - references assets(code)
+
+  @Column({
+    name: 'wallet_type',
+    type: 'text',
+    default: WalletType.FUNDING,
+  })
+  wallet_type: WalletType; // 'spot', 'future', 'funding'
 
   @Column({
     type: 'numeric',

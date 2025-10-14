@@ -18,7 +18,7 @@ import { RedisModule } from 'src/modules/redis/redis.module';
       isGlobal: true,
     }),
     TypeOrmModule.forRoot(typeOrmConfig),
-    RedisModule, // 🔴 Global Redis module
+    RedisModule,
     AuthModule,
     UserModule,
     BalanceModule,

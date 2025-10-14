@@ -18,7 +18,7 @@ export const typeOrmConfig: TypeOrmModuleOptions = {
   entities: ['dist/**/*.entity{.ts,.js}'],
   migrations: ['dist/migrations/*{.ts,.js}'],
   synchronize: process.env.TYPEORM_SYNC === 'false', // Chỉ dùng trong dev, tránh dùng trong production
-  logging: true,
+  logging: false  ,
 };
 
 /**

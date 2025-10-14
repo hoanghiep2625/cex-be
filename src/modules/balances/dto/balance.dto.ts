@@ -1,4 +1,11 @@
-import { IsString, IsOptional, Matches, IsNumberString } from 'class-validator';
+import {
+  IsString,
+  IsOptional,
+  Matches,
+  IsNumberString,
+  IsEnum,
+} from 'class-validator';
+import { WalletType } from '../entities/balance.entity';
 
 export class CreateBalanceDto {
   @IsString({ message: 'Currency code must be a string' })
@@ -9,6 +16,12 @@ export class CreateBalanceDto {
   @IsNumberString({}, { message: 'Available must be a valid number string' })
   @Matches(/^\d+(\.\d{1,18})?$/, { message: 'Invalid amount format' })
   available?: string; // Initial balance (optional, default 0)
+
+  @IsOptional()
+  @IsEnum(WalletType, {
+    message: 'Wallet type must be spot, future, or funding',
+  })
+  wallet_type?: WalletType; // Default 'funding'
 }
 
 export class UpdateBalanceDto {
@@ -28,6 +41,12 @@ export class TransferBalanceDto {
   @Matches(/^[A-Z]{2,10}$/, { message: 'Invalid currency format' })
   currency: string; // Currency to transfer
 
+  @IsOptional()
+  @IsEnum(WalletType, {
+    message: 'Wallet type must be spot, future, or funding',
+  })
+  wallet_type?: WalletType; // Default 'funding'
+
   @IsNumberString({}, { message: 'Amount must be a valid number string' })
   @Matches(/^\d*\.?\d+$/, { message: 'Amount must be positive' })
   amount: string; // Amount to transfer
@@ -41,7 +60,33 @@ export class LockBalanceDto {
   @Matches(/^[A-Z]{2,10}$/, { message: 'Invalid currency format' })
   currency: string;
 
+  @IsOptional()
+  @IsEnum(WalletType, {
+    message: 'Wallet type must be spot, future, or funding',
+  })
+  wallet_type?: WalletType; // Default 'funding'
+
   @IsNumberString({}, { message: 'Amount must be a valid number string' })
   @Matches(/^\d*\.?\d+$/, { message: 'Amount must be positive' })
   amount: string;
+}
+
+export class TransferBetweenWalletsDto {
+  @IsString({ message: 'Currency must be specified' })
+  @Matches(/^[A-Z]{2,10}$/, { message: 'Invalid currency format' })
+  currency: string;
+
+  @IsNumberString({}, { message: 'Amount must be a valid number string' })
+  @Matches(/^\d*\.?\d+$/, { message: 'Amount must be positive' })
+  amount: string;
+
+  @IsEnum(WalletType, {
+    message: 'From wallet type must be spot, future, or funding',
+  })
+  from_wallet_type: WalletType;
+
+  @IsEnum(WalletType, {
+    message: 'To wallet type must be spot, future, or funding',
+  })
+  to_wallet_type: WalletType;
 }

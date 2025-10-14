@@ -17,6 +17,7 @@ import { Balance } from '../balances/entities/balance.entity';
 import { Asset } from '../assets/entities/asset.entity';
 import { RedisService } from '../redis/redis.service';
 import { OrderBookService } from '../redis/orderbook.service';
+import { WalletType } from '../balances/entities/balance.entity';
 
 @Injectable()
 export class OrderService {
@@ -396,19 +397,24 @@ export class OrderService {
     assetCode: string,
     requiredAmount: string,
   ): Promise<void> {
+    // Chỉ sử dụng ví spot cho lệnh GTC
     const balance = await queryRunner.manager.findOne(Balance, {
-      where: { user_id, currency: assetCode },
+      where: { user_id, currency: assetCode, wallet_type: WalletType.SPOT },
     });
 
     if (!balance) {
-      throw new BadRequestException(`No ${assetCode} balance found`);
+      throw new BadRequestException(
+        `No ${assetCode} balance found in spot wallet`,
+      );
     }
 
     const available = parseFloat(balance.available);
     const required = parseFloat(requiredAmount);
 
     if (available < required) {
-      throw new BadRequestException(`Insufficient ${assetCode} balance`);
+      throw new BadRequestException(
+        `Insufficient ${assetCode} balance in spot wallet`,
+      );
     }
 
     // Reserve the balance
@@ -594,12 +600,15 @@ export class OrderService {
     assetCode: string,
     amount: string,
   ): Promise<void> {
+    // Chỉ sử dụng ví spot cho lệnh GTC
     const balance = await queryRunner.manager.findOne(Balance, {
-      where: { user_id, currency: assetCode },
+      where: { user_id, currency: assetCode, wallet_type: WalletType.SPOT },
     });
 
     if (!balance) {
-      throw new BadRequestException(`No ${assetCode} balance found`);
+      throw new BadRequestException(
+        `No ${assetCode} balance found in spot wallet`,
+      );
     }
 
     const releaseAmount = parseFloat(amount);
@@ -608,7 +617,9 @@ export class OrderService {
 
     // Validate we have enough locked balance
     if (currentLocked < releaseAmount) {
-      throw new BadRequestException(`Insufficient locked ${assetCode} balance`);
+      throw new BadRequestException(
+        `Insufficient locked ${assetCode} balance in spot wallet`,
+      );
     }
 
     // Release the balance
