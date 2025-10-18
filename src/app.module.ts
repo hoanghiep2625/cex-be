@@ -11,6 +11,9 @@ import { AssetModule } from 'src/modules/assets/asset.module';
 import { SymbolModule } from 'src/modules/symbols/symbol.module';
 import { OrderModule } from 'src/modules/orders/order.module';
 import { RedisModule } from 'src/modules/redis/redis.module';
+import { TradeModule } from 'src/modules/trades/trade.module';
+import { MatchingEngineModule } from 'src/modules/matching-engine/matching-engine.module';
+import { LedgerModule } from 'src/modules/ledgers/ledger.module';
 
 @Module({
   imports: [
@@ -25,6 +28,9 @@ import { RedisModule } from 'src/modules/redis/redis.module';
     AssetModule,
     SymbolModule,
     OrderModule,
+    TradeModule,
+    MatchingEngineModule,
+    LedgerModule,
   ],
   controllers: [AppController],
   providers: [AppService],

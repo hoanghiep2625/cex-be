@@ -39,7 +39,6 @@ export class RedisService implements OnModuleDestroy {
         channel,
         JSON.stringify(data),
       );
-      console.log(`📡 Published to ${channel}:`, data);
       return result;
     } catch (error) {
       console.error(`❌ Failed to publish to ${channel}:`, error);
@@ -87,6 +86,43 @@ export class RedisService implements OnModuleDestroy {
    */
   getClient(): Redis {
     return this.redisClient;
+  }
+
+  /**
+   * 🧹 Clear all order book data for a symbol (for testing/reset)
+   * Removes all bids, asks, and order data from Redis
+   */
+  async clearOrderBook(symbol: string): Promise<number> {
+    const client = this.redisClient;
+    const keys = [`orderbook:${symbol}:bids`, `orderbook:${symbol}:asks`];
+
+    // Get all price levels
+    const bidPrices = await client.zrange(`orderbook:${symbol}:bids`, 0, -1);
+    const askPrices = await client.zrange(`orderbook:${symbol}:asks`, 0, -1);
+
+    // Add price-level hashes to delete
+    bidPrices.forEach((price) => {
+      keys.push(`orderbook:${symbol}:bids:${price}`);
+    });
+    askPrices.forEach((price) => {
+      keys.push(`orderbook:${symbol}:asks:${price}`);
+    });
+
+    // Delete all keys
+    if (keys.length > 0) {
+      return await client.del(...keys);
+    }
+    return 0;
+  }
+
+  /**
+   * 🧹 Clear ALL Redis data (DANGEROUS - for testing only)
+   * Flushes entire Redis database
+   */
+  async clearAllData(): Promise<void> {
+    console.log('⚠️  FLUSHING ALL REDIS DATA - This cannot be undone!');
+    await this.redisClient.flushdb();
+    console.log('✅ All Redis data cleared');
   }
 
   /**

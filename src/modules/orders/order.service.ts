@@ -2,6 +2,8 @@ import {
   Injectable,
   BadRequestException,
   NotFoundException,
+  Inject,
+  forwardRef,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, DataSource, In } from 'typeorm';
@@ -17,6 +19,7 @@ import { Balance } from '../balances/entities/balance.entity';
 import { Asset } from '../assets/entities/asset.entity';
 import { RedisService } from '../redis/redis.service';
 import { OrderBookService } from '../redis/orderbook.service';
+import { MatchingEngineService } from '../matching-engine/matching-engine.service';
 import { WalletType } from '../balances/entities/balance.entity';
 import Decimal from 'decimal.js';
 
@@ -30,6 +33,8 @@ export class OrderService {
     private readonly dataSource: DataSource,
     private readonly redisService: RedisService,
     private readonly orderBookService: OrderBookService,
+    @Inject(forwardRef(() => MatchingEngineService))
+    private readonly matchingEngineService: MatchingEngineService,
   ) {}
 
   async createOrder(
@@ -123,8 +128,16 @@ export class OrderService {
         });
       }
 
-      // �📡 Publish order event to Redis
-      await this.publishOrderEvent('order.created', fullOrder);
+      // 🎯 Trigger matching engine & publish event in parallel (fire-and-forget)
+      if (fullOrder.type === OrderType.LIMIT && fullOrder.price) {
+        this.matchingEngineService
+          .matchLimitOrder(fullOrder)
+          .catch((err) => console.error('❌ Matching engine error:', err));
+      }
+
+      this.publishOrderEvent('order.created', fullOrder).catch((err) =>
+        console.error('❌ Publish event error:', err),
+      );
 
       return fullOrder;
     } catch (error) {
@@ -500,8 +513,6 @@ export class OrderService {
         `user:${order.user_id}:orders`,
         eventData,
       );
-
-      console.log(`✅ Published ${eventType} for order ${order.id}`);
     } catch (error) {
       // ⚠️ Không throw error để không ảnh hưởng order creation
       // Chỉ log để debug
