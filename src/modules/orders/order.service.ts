@@ -161,74 +161,6 @@ export class OrderService {
     return order;
   }
 
-  async getUserOrders(
-    user_id: number,
-    filters: {
-      status?: OrderStatus[];
-      symbol?: string;
-      side?: OrderSide;
-      type?: OrderType;
-      limit?: number;
-      offset?: number;
-    } = {},
-  ): Promise<{ orders: Order[]; total: number }> {
-    const queryBuilder = this.orderRepository
-      .createQueryBuilder('order')
-      .leftJoinAndSelect('order.user', 'user')
-      .leftJoinAndSelect('order.symbol_entity', 'symbol_entity')
-      .where('order.user_id = :user_id', { user_id: user_id.toString() });
-
-    if (filters.status?.length) {
-      queryBuilder.andWhere('order.status IN (:...statuses)', {
-        statuses: filters.status,
-      });
-    }
-
-    if (filters.symbol) {
-      queryBuilder.andWhere('order.symbol = :symbol', {
-        symbol: filters.symbol,
-      });
-    }
-
-    if (filters.side) {
-      queryBuilder.andWhere('order.side = :side', { side: filters.side });
-    }
-
-    if (filters.type) {
-      queryBuilder.andWhere('order.type = :type', { type: filters.type });
-    }
-
-    const total = await queryBuilder.getCount();
-
-    if (filters.offset) {
-      queryBuilder.skip(filters.offset);
-    }
-
-    queryBuilder.take(filters.limit || 50);
-
-    queryBuilder.orderBy('order.created_at', 'DESC');
-
-    const orders = await queryBuilder.getMany();
-
-    return { orders, total };
-  }
-
-  async getUserOrderById(user_id: number, order_id: string): Promise<Order> {
-    const order = await this.orderRepository.findOne({
-      where: {
-        id: order_id,
-        user_id: user_id.toString(),
-      },
-      relations: ['user', 'symbol_entity'],
-    });
-
-    if (!order) {
-      throw new NotFoundException('Order not found');
-    }
-
-    return order;
-  }
-
   async cancelOrder(user_id: number, order_id: string): Promise<Order> {
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
@@ -290,36 +222,6 @@ export class OrderService {
     } finally {
       await queryRunner.release();
     }
-  }
-
-  async getUserOrderHistory(
-    user_id: number,
-    filters: {
-      symbol?: string;
-      side?: OrderSide;
-      limit?: number;
-      offset?: number;
-    } = {},
-  ): Promise<{ orders: Order[]; total: number }> {
-    return this.getUserOrders(user_id, {
-      ...filters,
-      status: [OrderStatus.FILLED, OrderStatus.CANCELED, OrderStatus.REJECTED],
-    });
-  }
-
-  async getUserActiveOrders(
-    user_id: number,
-    filters: {
-      symbol?: string;
-      side?: OrderSide;
-      limit?: number;
-      offset?: number;
-    } = {},
-  ): Promise<{ orders: Order[]; total: number }> {
-    return this.getUserOrders(user_id, {
-      ...filters,
-      status: [OrderStatus.NEW, OrderStatus.PARTIALLY_FILLED],
-    });
   }
 
   private validateOrderParameters(
@@ -453,19 +355,6 @@ export class OrderService {
     });
   }
 
-  /**
-   * 📡 Publish order event to Redis
-   *
-   * @param eventType - Loại event: 'order.created', 'order.filled', 'order.canceled'
-   * @param order - Order object đầy đủ
-   *
-   * 🎯 Events sẽ được consume bởi:
-   * - Matching Engine: Xử lý match orders
-   * - WebSocket Service: Real-time notifications
-   * - Risk Management: Monitor positions
-   * - Audit Service: Compliance tracking
-   * - Notification Service: Email/SMS alerts
-   */
   private async publishOrderEvent(
     eventType: string,
     order: Order,
@@ -520,10 +409,6 @@ export class OrderService {
     }
   }
 
-  /**
-   * 🔄 Sync existing database orders to Redis order book
-   * This function should be called once to populate Redis with existing orders
-   */
   async syncOrdersToRedis(): Promise<{ synced: number; errors: number }> {
     console.log('🔄 Starting sync of database orders to Redis...');
 
@@ -615,14 +500,6 @@ export class OrderService {
     }
   }
 
-  /**
-   * 🔓 Release locked balance back to available
-   *
-   * @param queryRunner - Database transaction
-   * @param user_id - User ID
-   * @param assetCode - Asset code to release
-   * @param amount - Amount to release
-   */
   private async releaseLockedBalance(
     queryRunner: any,
     user_id: number,

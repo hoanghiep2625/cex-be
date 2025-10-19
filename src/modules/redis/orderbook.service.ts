@@ -134,81 +134,6 @@ export class OrderBookService {
     );
   }
 
-  /**
-   * 📊 Get order book snapshot (L2 data)
-   *
-   * @param symbol - Trading pair
-   * @param depth - Number of price levels (default: 20)
-   */
-  async getOrderBook(
-    symbol: string,
-    depth: number = 20,
-  ): Promise<OrderBookSnapshot> {
-    const client = this.redisService.getClient();
-
-    // Get top bids (highest prices first) - ZREVRANGE for DESC
-    const bidData = await client.zrevrange(
-      `orderbook:${symbol}:bids`,
-      0,
-      depth - 1,
-    );
-
-    // Get top asks (lowest prices first) - ZRANGE for ASC
-    const askData = await client.zrange(
-      `orderbook:${symbol}:asks`,
-      0,
-      depth - 1,
-    );
-
-    // Parse bids - get quantities from hash
-    const bids: OrderBookLevel[] = await Promise.all(
-      bidData.map(async (price) => {
-        const totalQty = await this.getTotalQuantityAtPrice(
-          symbol,
-          'bids',
-          price,
-        );
-        const orderCount = await this.getOrderCountAtPrice(
-          symbol,
-          'bids',
-          price,
-        );
-        return {
-          price,
-          quantity: totalQty.toString(),
-          count: orderCount,
-        };
-      }),
-    );
-
-    // Parse asks - get quantities from hash
-    const asks: OrderBookLevel[] = await Promise.all(
-      askData.map(async (price) => {
-        const totalQty = await this.getTotalQuantityAtPrice(
-          symbol,
-          'asks',
-          price,
-        );
-        const orderCount = await this.getOrderCountAtPrice(
-          symbol,
-          'asks',
-          price,
-        );
-        return {
-          price,
-          quantity: totalQty.toString(),
-          count: orderCount,
-        };
-      }),
-    );
-
-    return {
-      symbol,
-      bids,
-      asks,
-      timestamp: Date.now(),
-    };
-  }
 
   /**
    * 💰 Get best bid and ask prices
@@ -338,17 +263,6 @@ export class OrderBookService {
     return totalQty.toNumber();
   }
 
-  private async getOrderCountAtPrice(
-    symbol: string,
-    side: string,
-    price: string,
-  ): Promise<number> {
-    const client = this.redisService.getClient();
-    const orderHashKey = `orderbook:${symbol}:${side}:${price}`;
-
-    return await client.hlen(orderHashKey);
-  }
-
   /**
    * 🧹 Clear entire order book for symbol
    *
@@ -364,56 +278,5 @@ export class OrderBookService {
       await client.del(...keys);
       console.log(`🧹 Cleared order book for ${symbol} (${keys.length} keys)`);
     }
-  }
-
-  /**
-   * 📊 Get order book statistics
-   *
-   * @param symbol - Trading pair
-   */
-  async getOrderBookStats(symbol: string): Promise<{
-    bidLevels: number;
-    askLevels: number;
-    totalBidVolume: number;
-    totalAskVolume: number;
-    spread: number | null;
-  }> {
-    const client = this.redisService.getClient();
-
-    // Count price levels
-    const bidLevels = await client.zcard(`orderbook:${symbol}:bids`);
-    const askLevels = await client.zcard(`orderbook:${symbol}:asks`);
-
-    // Get all levels to calculate volume
-    const bidData = await client.zrange(`orderbook:${symbol}:bids`, 0, -1);
-    const askData = await client.zrange(`orderbook:${symbol}:asks`, 0, -1);
-
-    let totalBidVolume = new Decimal(0);
-    let totalAskVolume = new Decimal(0);
-
-    bidData.forEach((item) => {
-      const [, quantity] = item.split(':');
-      totalBidVolume = totalBidVolume.plus(new Decimal(quantity));
-    });
-
-    askData.forEach((item) => {
-      const [, quantity] = item.split(':');
-      totalAskVolume = totalAskVolume.plus(new Decimal(quantity));
-    });
-
-    // Calculate spread
-    const { bestBid, bestAsk } = await this.getBestBidAsk(symbol);
-    let spread = null;
-    if (bestBid && bestAsk) {
-      spread = new Decimal(bestAsk).minus(new Decimal(bestBid)).toNumber();
-    }
-
-    return {
-      bidLevels,
-      askLevels,
-      totalBidVolume: totalBidVolume.toNumber(),
-      totalAskVolume: totalAskVolume.toNumber(),
-      spread,
-    };
   }
 }
