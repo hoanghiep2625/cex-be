@@ -114,20 +114,6 @@ export class OrderService {
       // 🎯 Get full order with relations để return & publish
       const fullOrder = await this.findOrderById(savedOrder.id);
 
-      // � Add order to order book L2
-      // Chỉ thêm LIMIT orders vào orderbook (MARKET orders sẽ match ngay)
-      if (fullOrder.type === OrderType.LIMIT && fullOrder.price) {
-        await this.orderBookService.addOrder(fullOrder.symbol, {
-          orderId: fullOrder.id,
-          userId: parseInt(fullOrder.user_id),
-          price: fullOrder.price,
-          quantity: fullOrder.qty,
-          remainingQty: fullOrder.qty, // Initially same as qty
-          timestamp: fullOrder.created_at.getTime(),
-          side: fullOrder.side,
-        });
-      }
-
       // 🎯 Trigger matching engine & publish event in parallel (fire-and-forget)
       if (fullOrder.type === OrderType.LIMIT && fullOrder.price) {
         this.matchingEngineService
@@ -159,6 +145,19 @@ export class OrderService {
     }
 
     return order;
+  }
+
+  async getSymbolByCode(code: string): Promise<Symbol> {
+    const symbol = await this.symbolRepository.findOne({
+      where: { symbol: code },
+      relations: ['base_asset_entity', 'quote_asset_entity'],
+    });
+
+    if (!symbol) {
+      throw new NotFoundException(`Symbol ${code} not found`);
+    }
+
+    return symbol;
   }
 
   async cancelOrder(user_id: number, order_id: string): Promise<Order> {
@@ -533,5 +532,25 @@ export class OrderService {
       available: currentAvailable.plus(releaseAmount).toString(),
       locked: currentLocked.minus(releaseAmount).toString(),
     });
+  }
+
+  /**
+   * 📝 Update order status and filled quantity in database
+   * @param orderId - Order ID
+   * @param status - New status
+   * @param filledQty - Filled quantity
+   */
+  async updateOrderStatusInDb(
+    orderId: string,
+    status: OrderStatus,
+    filledQty: string,
+  ): Promise<void> {
+    await this.orderRepository.update(
+      { id: orderId },
+      {
+        status,
+        filled_qty: filledQty,
+      },
+    );
   }
 }

@@ -243,4 +243,32 @@ export class BalanceService {
       };
     });
   }
+
+  /**
+   * 📝 Cập nhật amount của balance (available và locked)
+   * @param user_id - User ID
+   * @param currency - Currency (BTC, ETH, USDT)
+   * @param wallet_type - Wallet type
+   * @param available - New available amount
+   * @param locked - New locked amount
+   */
+  async updateBalanceAmount(
+    user_id: number,
+    currency: string,
+    wallet_type: WalletType,
+    available: string,
+    locked: string,
+  ): Promise<Balance> {
+    const balance = await this.getUserBalance(user_id, currency, wallet_type);
+
+    await this.balanceRepository.update(
+      { id: balance.id },
+      {
+        available,
+        locked,
+      },
+    );
+
+    return await this.getUserBalance(user_id, currency, wallet_type);
+  }
 }

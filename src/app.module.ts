@@ -14,6 +14,9 @@ import { RedisModule } from 'src/modules/redis/redis.module';
 import { TradeModule } from 'src/modules/trades/trade.module';
 import { MatchingEngineModule } from 'src/modules/matching-engine/matching-engine.module';
 import { LedgerModule } from 'src/modules/ledgers/ledger.module';
+import { Order } from './modules/orders/entities/order.entity';
+import { Trade } from './modules/trades/entities/trade.entity';
+import { Balance } from './modules/balances/entities/balance.entity';
 
 @Module({
   imports: [
@@ -21,6 +24,7 @@ import { LedgerModule } from 'src/modules/ledgers/ledger.module';
       isGlobal: true,
     }),
     TypeOrmModule.forRoot(typeOrmConfig),
+    TypeOrmModule.forFeature([Order, Trade, Balance]),
     RedisModule,
     AuthModule,
     UserModule,
