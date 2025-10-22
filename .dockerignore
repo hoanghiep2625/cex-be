@@ -14,8 +14,4 @@ README.md
 coverage
 .nyc_output
 test
-jest.config.js
-tsconfig.build.json
-tsconfig.json
-.eslintrc.js
-.prettierrc
+
