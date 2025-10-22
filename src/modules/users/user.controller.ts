@@ -7,9 +7,8 @@ import {
   Query,
   ParseIntPipe,
   DefaultValuePipe,
-  Put,
-  Body,
-  Request,
+  BadRequestException,
+  Headers,
 } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
@@ -31,9 +30,20 @@ export class UserController {
   }
 
   @Get('/me')
-  @UseGuards(JwtAuthGuard)
-  async getMyProfile(@Request() req) {
-    return await this.userService.getUserById(req.user.id);
+  async getMyProfileByToken(@Headers('authorization') authHeader: string) {
+    if (!authHeader) {
+      throw new BadRequestException('Authorization header is required');
+    }
+    // Tách "Bearer TOKEN" thành TOKEN
+    const parts = authHeader.split(' ');
+    if (parts.length !== 2 || parts[0] !== 'Bearer') {
+      throw new BadRequestException(
+        'Invalid authorization header format. Expected: Bearer <token>',
+      );
+    }
+
+    const token = parts[1];
+    return await this.userService.getUserByAccessToken(token);
   }
 
   @Get('/:id')

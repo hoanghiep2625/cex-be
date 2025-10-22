@@ -1,17 +1,20 @@
 import { Module } from '@nestjs/common';
-import { TypeOrmModule } from '@nestjs/typeorm'; // Import TypeOrmModule để sử dụng repository pattern
-import { UserController } from './user.controller'; // Import UserController (đã sửa đường dẫn)
-import { UserService } from './user.service'; // Import UserService (đã sửa đường dẫn)
-import { User } from './entities/user.entity'; // Import User entity
+import { TypeOrmModule } from '@nestjs/typeorm';
+import { JwtModule } from '@nestjs/jwt';
+import { UserController } from './user.controller';
+import { UserService } from './user.service';
+import { User } from './entities/user.entity';
 
 @Module({
   imports: [
-    // TypeOrmModule.forFeature: Đăng ký User entity để có thể inject UserRepository
-    // vào UserService để thực hiện các operations với database
     TypeOrmModule.forFeature([User]),
+    JwtModule.register({
+      secret: process.env.JWT_ACCESS_SECRET || 'your-secret-key',
+      signOptions: { expiresIn: '1h' },
+    }),
   ],
-  controllers: [UserController], // Controllers xử lý HTTP requests
-  providers: [UserService], // Services chứa business logic
-  exports: [UserService], // Export UserService để các module khác có thể sử dụng
+  controllers: [UserController],
+  providers: [UserService],
+  exports: [UserService],
 })
 export class UserModule {}
