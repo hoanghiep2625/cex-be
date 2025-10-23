@@ -134,7 +134,6 @@ export class OrderBookService {
     );
   }
 
-
   /**
    * 💰 Get best bid and ask prices
    *
@@ -278,5 +277,79 @@ export class OrderBookService {
       await client.del(...keys);
       console.log(`🧹 Cleared order book for ${symbol} (${keys.length} keys)`);
     }
+  }
+
+  /**
+   * 📊 Get order book depth (all bids and asks)
+   *
+   * @param symbol - Trading pair
+   * @param limit - Number of levels (default 20)
+   * @returns Bids and asks
+   */
+  async getOrderBookDepth(
+    symbol: string,
+    limit: number = 20,
+  ): Promise<OrderBookSnapshot> {
+    const client = this.redisService.getClient();
+
+    // Lấy bids (highest prices first - DESC)
+    const bidsPrices = await client.zrevrange(
+      `orderbook:${symbol}:bids`,
+      0,
+      limit - 1,
+    );
+    const bids: OrderBookLevel[] = [];
+    for (const price of bidsPrices) {
+      const qty = await this.getTotalQuantityAtPrice(symbol, 'bids', price);
+      bids.push({ price, quantity: qty.toString(), count: 0 });
+    }
+
+    // Lấy asks (lowest prices first - ASC)
+    const asksPrices = await client.zrange(
+      `orderbook:${symbol}:asks`,
+      0,
+      limit - 1,
+    );
+    const asks: OrderBookLevel[] = [];
+    for (const price of asksPrices) {
+      const qty = await this.getTotalQuantityAtPrice(symbol, 'asks', price);
+      asks.push({ price, quantity: qty.toString(), count: 0 });
+    }
+
+    return {
+      symbol,
+      bids,
+      asks,
+      timestamp: Date.now(),
+    };
+  }
+
+  /**
+   * 📊 Get orders by symbol and side
+   *
+   * @param symbol - Trading pair
+   * @param side - BUY | SELL
+   * @returns Array of OrderBookLevel
+   */
+  async getOrdersBySymbolAndSide(
+    symbol: string,
+    side: 'BUY' | 'SELL',
+  ): Promise<OrderBookLevel[]> {
+    const client = this.redisService.getClient();
+    const sideKey = side === 'BUY' ? 'bids' : 'asks';
+
+    // Lấy tất cả prices
+    const prices =
+      side === 'BUY'
+        ? await client.zrevrange(`orderbook:${symbol}:${sideKey}`, 0, -1)
+        : await client.zrange(`orderbook:${symbol}:${sideKey}`, 0, -1);
+
+    const levels: OrderBookLevel[] = [];
+    for (const price of prices) {
+      const qty = await this.getTotalQuantityAtPrice(symbol, sideKey, price);
+      levels.push({ price, quantity: qty.toString(), count: 0 });
+    }
+
+    return levels;
   }
 }

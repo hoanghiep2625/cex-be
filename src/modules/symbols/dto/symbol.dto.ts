@@ -6,7 +6,9 @@ import {
   IsBoolean,
   IsIn,
   IsNotEmpty,
+  IsEnum,
 } from 'class-validator';
+import { SymbolType } from '../enums/symbol-type.enum';
 
 export class CreateSymbolDto {
   @IsString({ message: 'Symbol must be a string' })
@@ -62,6 +64,12 @@ export class CreateSymbolDto {
   status?: string;
 
   @IsOptional()
+  @IsEnum(SymbolType, {
+    message: 'Invalid type. Must be: spot, futures, margin, isolated',
+  })
+  type?: SymbolType;
+
+  @IsOptional()
   @IsBoolean()
   is_spot_trading_allowed?: boolean;
 
@@ -107,6 +115,12 @@ export class UpdateSymbolDto {
   status?: string;
 
   @IsOptional()
+  @IsEnum(SymbolType, {
+    message: 'Invalid type. Must be: spot, futures, margin, isolated',
+  })
+  type?: SymbolType;
+
+  @IsOptional()
   @IsBoolean()
   is_spot_trading_allowed?: boolean;
 
@@ -136,4 +150,12 @@ export class SymbolFilterDto {
   @IsOptional()
   @IsBoolean()
   is_margin_trading_allowed?: boolean;
+
+  @IsOptional()
+  @IsString()
+  from?: string; // 'markets'
+
+  @IsOptional()
+  @IsEnum(SymbolType)
+  type?: SymbolType;
 }

@@ -2,21 +2,14 @@ import {
   Controller,
   Get,
   Post,
-  Put,
-  Delete,
-  Param,
   Body,
   Query,
   UseGuards,
-  HttpCode,
-  HttpStatus,
+  Param,
+  ParseIntPipe,
 } from '@nestjs/common';
 import { SymbolService } from './symbol.service';
-import {
-  CreateSymbolDto,
-  UpdateSymbolDto,
-  SymbolFilterDto,
-} from './dto/symbol.dto';
+import { CreateSymbolDto, SymbolFilterDto } from './dto/symbol.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { Roles } from 'src/modules/auth/decorators/roles.decorator';
 import { UserRole } from 'src/modules/users/entities/user.entity';
@@ -28,12 +21,37 @@ export class SymbolController {
 
   @Get()
   async getAllSymbols(@Query() filters: SymbolFilterDto) {
-    return await this.symbolService.getAllSymbols(filters);
+    const result = await this.symbolService.getAllSymbols(filters);
+
+    // Trả về kèm theo query parameters
+    return {
+      data: result,
+      from: filters.from || null,
+      type: filters.type || 'spot',
+    };
+  }
+
+  @Get('code/:code')
+  async getSymbolByCode(@Param('code') code: string) {
+    return await this.symbolService.getSymbolByCode(code);
+  }
+
+  @Get(':symbol/:type')
+  async getSymbolBySymbolAndType(
+    @Param('symbol') symbol: string,
+    @Param('type') type: string,
+  ) {
+    return await this.symbolService.getSymbolBySymbolAndType(symbol, type);
+  }
+
+  @Get(':id')
+  async getSymbolById(@Param('id', ParseIntPipe) id: number) {
+    return await this.symbolService.getSymbolById(id);
   }
 
   @Post()
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN) // 👑 Chỉ admin tạo symbols
+  @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN)
   async createSymbol(@Body() createSymbolDto: CreateSymbolDto) {
     return await this.symbolService.createSymbol(createSymbolDto);
   }

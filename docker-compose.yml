@@ -1,0 +1,36 @@
+services:
+  api-cex-tahoanghiep:
+    image: ghcr.io/hoanghiep2625/api-cex-tahoanghiep:${APP_TAG:-latest}
+    container_name: api-cex-tahoanghiep
+    restart: unless-stopped
+    env_file:
+      - /srv/tahoanghiep/env/api-cex-tahoanghiep.env
+    expose:
+      - '3000'
+      - '8080'
+    networks:
+      - traefik-net
+      - postgres-net
+      - redis-net
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=traefik-net
+      - traefik.http.routers.api-cex-tahoanghiep.rule=Host(`api-cex.tahoanghiep.com`)
+      - traefik.http.routers.api-cex-tahoanghiep.entrypoints=websecure
+      - traefik.http.routers.api-cex-tahoanghiep.tls.certresolver=le
+      - traefik.http.services.api-cex-tahoanghiep.loadbalancer.server.port=3000
+      - traefik.http.routers.api-cex-tahoanghiep-ws.rule=Host(`api-cex.tahoanghiep.com`) && PathPrefix(`/`)
+      - traefik.http.routers.api-cex-tahoanghiep-ws.entrypoints=websecure
+      - traefik.http.routers.api-cex-tahoanghiep-ws.tls.certresolver=le
+      - traefik.http.services.api-cex-tahoanghiep-ws.loadbalancer.server.port=8080
+
+networks:
+  traefik-net:
+    external: true
+    name: traefik-net
+  postgres-net:
+    external: true
+    name: postgres-net
+  redis-net:
+    external: true
+    name: redis-net

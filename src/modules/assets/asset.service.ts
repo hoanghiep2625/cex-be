@@ -6,15 +6,7 @@ import {
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Asset } from './entities/asset.entity';
-
-export interface CreateAssetDto {
-  code: string;
-  precision?: number;
-}
-
-export interface UpdateAssetDto {
-  precision?: number;
-}
+import { CreateAssetDto, UpdateAssetDto } from './dto/asset.dto';
 
 @Injectable()
 export class AssetService {
@@ -58,10 +50,10 @@ export class AssetService {
 
     const asset = this.assetRepository.create({
       code: createAssetDto.code.toUpperCase(),
+      name: createAssetDto.name,
       precision: createAssetDto.precision || 8,
     });
 
     return await this.assetRepository.save(asset);
   }
-
 }

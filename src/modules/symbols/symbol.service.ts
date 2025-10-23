@@ -7,6 +7,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Symbol } from './entities/symbol.entity';
 import { CreateSymbolDto, SymbolFilterDto } from './dto/symbol.dto';
+import { SymbolType } from './enums/symbol-type.enum';
 
 @Injectable()
 export class SymbolService {
@@ -36,6 +37,12 @@ export class SymbolService {
     if (filters?.status) {
       queryBuilder.andWhere('symbol.status = :status', {
         status: filters.status,
+      });
+    }
+
+    if (filters?.type) {
+      queryBuilder.andWhere('symbol.type = :type', {
+        type: filters.type.toLowerCase(),
       });
     }
 
@@ -84,6 +91,7 @@ export class SymbolService {
       min_qty: createSymbolDto.min_qty,
       max_qty: createSymbolDto.max_qty,
       status: createSymbolDto.status || 'TRADING',
+      type: createSymbolDto.type || SymbolType.SPOT,
       is_spot_trading_allowed: createSymbolDto.is_spot_trading_allowed ?? true,
       is_margin_trading_allowed:
         createSymbolDto.is_margin_trading_allowed ?? false,
@@ -91,5 +99,56 @@ export class SymbolService {
 
     const newSymbol = this.symbolRepository.create(symbolData);
     return await this.symbolRepository.save(newSymbol);
+  }
+
+  async getSymbolById(id: number): Promise<Symbol> {
+    const symbol = await this.symbolRepository
+      .createQueryBuilder('symbol')
+      .leftJoinAndSelect('symbol.base_asset_entity', 'base_asset')
+      .leftJoinAndSelect('symbol.quote_asset_entity', 'quote_asset')
+      .where('symbol.id = :id', { id })
+      .getOne();
+
+    if (!symbol) {
+      throw new NotFoundException(`Symbol with ID ${id} not found`);
+    }
+
+    return symbol;
+  }
+
+  async getSymbolByCode(code: string): Promise<Symbol> {
+    const symbol = await this.symbolRepository
+      .createQueryBuilder('symbol')
+      .leftJoinAndSelect('symbol.base_asset_entity', 'base_asset')
+      .leftJoinAndSelect('symbol.quote_asset_entity', 'quote_asset')
+      .where('symbol.symbol = :code', { code: code.toUpperCase() })
+      .getOne();
+
+    if (!symbol) {
+      throw new NotFoundException(`Symbol ${code} not found`);
+    }
+
+    return symbol;
+  }
+
+  async getSymbolBySymbolAndType(
+    symbolCode: string,
+    symbolType: string,
+  ): Promise<Symbol> {
+    const symbol = await this.symbolRepository
+      .createQueryBuilder('symbol')
+      .leftJoinAndSelect('symbol.base_asset_entity', 'base_asset')
+      .leftJoinAndSelect('symbol.quote_asset_entity', 'quote_asset')
+      .where('symbol.symbol = :symbol', { symbol: symbolCode.toUpperCase() })
+      .andWhere('symbol.type = :type', { type: symbolType.toLowerCase() })
+      .getOne();
+
+    if (!symbol) {
+      throw new NotFoundException(
+        `Symbol ${symbolCode} with type ${symbolType} not found`,
+      );
+    }
+
+    return symbol;
   }
 }

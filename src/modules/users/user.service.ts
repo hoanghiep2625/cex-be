@@ -57,11 +57,6 @@ export class UserService {
     return userWithoutPassword as User;
   }
 
-  /**
-   * 🔐 Verify access token và lấy user dựa trên id trong token
-   * @param accessToken - Access token từ client
-   * @returns User info (email, username, created_at, updated_at)
-   */
   async getUserByAccessToken(accessToken: string): Promise<{
     email: string;
     username: string;
@@ -90,7 +85,6 @@ export class UserService {
 
       console.log('✅ User found and returning:', user.email);
 
-      // Chỉ trả về fields cần thiết
       return {
         email: user.email,
         username: user.username,

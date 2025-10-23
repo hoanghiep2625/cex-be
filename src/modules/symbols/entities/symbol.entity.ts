@@ -9,6 +9,7 @@ import {
   JoinColumn,
 } from 'typeorm';
 import { Asset } from '../../assets/entities/asset.entity';
+import { SymbolType } from '../enums/symbol-type.enum';
 
 @Entity('symbols')
 @Index(['symbol'], { unique: true })
@@ -85,6 +86,13 @@ export class Symbol {
     default: 'TRADING',
   })
   status: string; // 'TRADING', 'DISABLED', 'MAINTENANCE'
+
+  @Column({
+    type: 'enum',
+    enum: SymbolType,
+    default: SymbolType.SPOT,
+  })
+  type: SymbolType; // SPOT, FUTURES, MARGIN, ISOLATED
 
   @Column({
     type: 'boolean',

@@ -15,6 +15,11 @@ export class Asset {
   code: string; // 'BTC', 'ETH', 'USDT'
 
   @Column({
+    type: 'text',
+  })
+  name: string; // 'Bitcoin', 'Ethereum', 'Tether'
+
+  @Column({
     type: 'integer',
     default: 8,
   })

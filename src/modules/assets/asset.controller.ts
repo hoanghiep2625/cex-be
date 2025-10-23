@@ -10,7 +10,8 @@ import {
   HttpCode,
   HttpStatus,
 } from '@nestjs/common';
-import { AssetService, CreateAssetDto, UpdateAssetDto } from './asset.service';
+import { AssetService } from './asset.service';
+import { CreateAssetDto, UpdateAssetDto } from './dto/asset.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from 'src/modules/auth/guards/roles.guard';
 import { Roles } from 'src/modules/auth/decorators/roles.decorator';
