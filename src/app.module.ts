@@ -11,6 +11,7 @@ import { AssetModule } from 'src/modules/assets/asset.module';
 import { SymbolModule } from 'src/modules/symbols/symbol.module';
 import { OrderModule } from 'src/modules/orders/order.module';
 import { RedisModule } from 'src/modules/redis/redis.module';
+import { WebSocketModule } from 'src/modules/websocket/websocket.module';
 import { TradeModule } from 'src/modules/trades/trade.module';
 import { MatchingEngineModule } from 'src/modules/matching-engine/matching-engine.module';
 import { LedgerModule } from 'src/modules/ledgers/ledger.module';
@@ -26,6 +27,7 @@ import { Balance } from './modules/balances/entities/balance.entity';
     TypeOrmModule.forRoot(typeOrmConfig),
     TypeOrmModule.forFeature([Order, Trade, Balance]),
     RedisModule,
+    WebSocketModule,
     AuthModule,
     UserModule,
     BalanceModule,

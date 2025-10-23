@@ -31,9 +31,24 @@ export class SymbolController {
     };
   }
 
+  /**
+   * 📊 Lấy market data cho một symbol
+   * GET /symbols/market-data/BTCUSDT?type=spot
+   */
+  @Get('market-data/:symbol')
+  async getMarketData(
+    @Param('symbol') symbol: string,
+    @Query('type') type: string = 'spot',
+  ) {
+    return await this.symbolService.getMarketData(symbol, type);
+  }
+
   @Get('code/:code')
-  async getSymbolByCode(@Param('code') code: string) {
-    return await this.symbolService.getSymbolByCode(code);
+  async getSymbolByCode(
+    @Param('code') code: string,
+    @Query('type') type: string = 'spot',
+  ) {
+    return await this.symbolService.getSymbolBySymbolAndType(code, type);
   }
 
   @Get(':symbol/:type')

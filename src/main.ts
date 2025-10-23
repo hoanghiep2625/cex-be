@@ -4,7 +4,9 @@ import { ValidationPipe } from '@nestjs/common';
 import { ResponseInterceptor } from './common/interceptors/response.interceptor';
 import { GlobalExceptionFilter } from './common/filters/global-exception.filter';
 import * as cookieParser from 'cookie-parser';
-import { OrderBookGateway } from './modules/redis/orderbook.gateway';
+import { OrderBookGateway } from 'src/modules/websocket/orderbook.gateway';
+import { RecentTradesGateway } from 'src/modules/websocket/recenttrades.gateway';
+import { MarketDataGateway } from 'src/modules/websocket/marketdata.gateway';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
@@ -43,17 +45,36 @@ async function bootstrap() {
   // ✅ WebSocket upgrade handler
   const server = app.getHttpServer();
   const orderBookGateway = app.get(OrderBookGateway);
+  const recentTradesGateway = app.get(RecentTradesGateway);
+  const marketDataGateway = app.get(MarketDataGateway);
 
   server.on('upgrade', (req: any, socket: any, head: any) => {
+    console.log(`[WS] Upgrade request: ${req.url}`);
     if (req.url.startsWith('/ws')) {
       const { WebSocketServer } = require('ws');
       const wss = new WebSocketServer({ noServer: true });
 
       wss.handleUpgrade(req, socket, head, (ws: any) => {
-        // Extract symbol from query or default to BTCUSDT
+        // Extract symbol and type from query params
         const url = new URL(req.url, `http://${req.headers.host}`);
         const symbol = url.searchParams.get('symbol') || 'BTCUSDT';
-        orderBookGateway.handleConnection(ws, symbol);
+        const type = url.searchParams.get('type') || 'spot';
+
+        // Route to appropriate gateway based on path
+        if (req.url.includes('/ws/trades')) {
+          console.log(
+            `[WS] Routing to RecentTradesGateway for symbol: ${symbol}`,
+          );
+          recentTradesGateway.handleConnection(ws, symbol);
+        } else if (req.url.includes('/ws/market-data')) {
+          console.log(
+            `[WS] Routing to MarketDataGateway for symbol: ${symbol}, type: ${type}`,
+          );
+          marketDataGateway.handleConnection(ws, symbol, type);
+        } else {
+          console.log(`[WS] Routing to OrderBookGateway for symbol: ${symbol}`);
+          orderBookGateway.handleConnection(ws, symbol);
+        }
       });
     }
   });
@@ -61,6 +82,8 @@ async function bootstrap() {
   await app.listen(process.env.PORT ?? 3000, () => {
     console.log('✅ NestJS API running on :3000');
     console.log('✅ WebSocket server ready on :3000/ws');
+    console.log('✅ RecentTrades WebSocket ready on :3000/ws/trades');
+    console.log('✅ MarketData WebSocket ready on :3000/ws/market-data');
   });
 }
 bootstrap();

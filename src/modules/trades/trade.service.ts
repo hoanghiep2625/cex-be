@@ -79,4 +79,18 @@ export class TradeService {
 
     return savedTrade;
   }
+
+  /**
+   * Get recent trades for a symbol
+   * @param symbol - Trading pair (BTCUSDT)
+   * @param limit - Number of recent trades to fetch (default: 50)
+   * @returns Array of recent trades sorted by most recent first
+   */
+  async getRecentTrades(symbol: string, limit: number = 50): Promise<Trade[]> {
+    return await this.tradeRepository.find({
+      where: { symbol },
+      order: { created_at: 'DESC' },
+      take: limit,
+    });
+  }
 }

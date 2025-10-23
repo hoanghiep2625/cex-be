@@ -3,13 +3,12 @@ import { ConfigModule } from '@nestjs/config';
 import { RedisService } from './redis.service';
 import { OrderBookService } from './orderbook.service';
 import { OrderBookController } from './orderbook.controller';
-import { OrderBookGateway } from './orderbook.gateway';
 
 @Global()
 @Module({
   imports: [ConfigModule],
   controllers: [OrderBookController],
-  providers: [RedisService, OrderBookService, OrderBookGateway],
+  providers: [RedisService, OrderBookService],
   exports: [RedisService, OrderBookService],
 })
 export class RedisModule {}

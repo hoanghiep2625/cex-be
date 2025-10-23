@@ -4,7 +4,7 @@ import {
   OnModuleDestroy,
   Logger,
 } from '@nestjs/common';
-import { OrderBookService } from './orderbook.service';
+import { OrderBookService } from '../redis/orderbook.service';
 
 @Injectable()
 export class OrderBookGateway implements OnModuleInit, OnModuleDestroy {
