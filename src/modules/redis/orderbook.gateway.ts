@@ -1,40 +1,58 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, OnModuleDestroy } from '@nestjs/common';
 import * as WebSocket from 'ws';
 import { OrderBookService } from './orderbook.service';
 
 @Injectable()
-export class OrderBookGateway {
-  private wss: WebSocket.Server;
+export class OrderBookGateway implements OnModuleDestroy {
+  private wss: WebSocket.Server | null = null;
   private logger = new Logger('OrderBookGateway');
   private clients = new Map<WebSocket, Set<string>>();
   private intervals = new Map<string, NodeJS.Timer>();
+  private wsPort = parseInt(process.env.WS_PORT || '8080', 10);
 
   constructor(private readonly orderBookService: OrderBookService) {
     this.initWebSocketServer();
   }
 
   private initWebSocketServer() {
-    this.wss = new WebSocket.Server({ port: 8080 });
+    try {
+      this.wss = new WebSocket.Server({ port: this.wsPort });
 
-    this.wss.on('connection', (ws: WebSocket) => {
-      this.logger.log('🔗 Client connected');
-      this.clients.set(ws, new Set());
+      this.wss.on('connection', (ws: WebSocket) => {
+        this.logger.log('🔗 Client connected');
+        this.clients.set(ws, new Set());
 
-      ws.on('message', (message: string) => {
-        this.handleMessage(ws, message);
+        ws.on('message', (message: string) => {
+          this.handleMessage(ws, message);
+        });
+
+        ws.on('close', () => {
+          this.logger.log('🔌 Client disconnected');
+          this.clients.delete(ws);
+        });
+
+        ws.on('error', (error) => {
+          this.logger.error(`❌ WebSocket error: ${error.message}`);
+        });
       });
 
-      ws.on('close', () => {
-        this.logger.log('🔌 Client disconnected');
-        this.clients.delete(ws);
-      });
+      this.logger.log(`✅ WebSocket server running on port ${this.wsPort}`);
+    } catch (err) {
+      this.logger.error(
+        `❌ Failed to start WS server on ${this.wsPort}: ${err}`,
+      );
+    }
+  }
 
-      ws.on('error', (error) => {
-        this.logger.error(`❌ WebSocket error: ${error.message}`);
-      });
-    });
-
-    this.logger.log('✅ WebSocket server running on port 8080');
+  onModuleDestroy() {
+    // Cleanup on app shutdown
+    if (this.wss) {
+      this.wss.close();
+      this.logger.log('🧹 WebSocket server closed');
+    }
+    // Clear intervals
+    this.intervals.forEach((interval) => clearInterval(interval as any));
+    this.intervals.clear();
   }
 
   private async handleMessage(ws: WebSocket, message: string) {
