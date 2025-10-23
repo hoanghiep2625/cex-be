@@ -1,4 +1,9 @@
-import { Injectable, OnModuleInit, OnModuleDestroy, Logger } from '@nestjs/common';
+import {
+  Injectable,
+  OnModuleInit,
+  OnModuleDestroy,
+  Logger,
+} from '@nestjs/common';
 import { OrderBookService } from './orderbook.service';
 
 @Injectable()
@@ -51,4 +56,3 @@ export class OrderBookGateway implements OnModuleInit, OnModuleDestroy {
     });
   }
 }
-

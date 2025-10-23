@@ -71,8 +71,7 @@ export class OrderBookService {
       }),
     );
 
-    // 2. Update total quantity tại price level (ZSet)
-    const totalQty = await this.getTotalQuantityAtPrice(symbol, side, price);
+    // 2. Add/Update price level trong ZSet (chỉ lưu price, không lưu quantity)
     const priceDecimal = new Decimal(price);
     if (priceDecimal.isNaN()) {
       throw new Error(
@@ -109,29 +108,21 @@ export class OrderBookService {
     // 1. Remove order từ hash
     await client.hdel(orderHashKey, orderId);
 
-    // 2. Update total quantity tại price level
-    const totalQty = await this.getTotalQuantityAtPrice(symbol, sideKey, price);
+    // 2. Check nếu không còn orders tại price level này
+    const remainingOrders = await client.hlen(orderHashKey);
 
-    if (totalQty === 0) {
-      // Nếu không còn orders, remove price level khỏi ZSet
-      await client.zrem(priceListKey, `${price}:0`);
-      await client.del(orderHashKey); // Cleanup empty hash
+    if (remainingOrders === 0) {
+      // Không còn orders → xoá price level khỏi ZSet và xoá hash
+      await client.zrem(priceListKey, price);
+      await client.del(orderHashKey);
+      console.log(
+        `🗑️ Removed price level ${price} (no orders left) for ${sideKey} ${symbol}`,
+      );
     } else {
-      // Update quantity trong ZSet
-      const priceDecimal = new Decimal(price);
-      if (priceDecimal.isNaN()) {
-        throw new Error(`Invalid price format: ${price} for order ${orderId}`);
-      }
-      await client.zadd(
-        priceListKey,
-        priceDecimal.toNumber(),
-        `${price}:${totalQty}`,
+      console.log(
+        `🗑️ Removed order ${orderId} at ${price} (still ${remainingOrders} orders left)`,
       );
     }
-
-    console.log(
-      `🗑️ Removed ${sideKey} order ${orderId} at ${price} for ${symbol}`,
-    );
   }
 
   /**
@@ -150,13 +141,11 @@ export class OrderBookService {
       0,
       0,
     );
-    const bestBid =
-      bestBidData.length > 0 ? bestBidData[0].split(':')[0] : null;
+    const bestBid = bestBidData.length > 0 ? bestBidData[0] : null;
 
     // Best ask = lowest price in asks ZSet
     const bestAskData = await client.zrange(`orderbook:${symbol}:asks`, 0, 0);
-    const bestAsk =
-      bestAskData.length > 0 ? bestAskData[0].split(':')[0] : null;
+    const bestAsk = bestAskData.length > 0 ? bestAskData[0] : null;
 
     return { bestBid, bestAsk };
   }
@@ -218,18 +207,6 @@ export class OrderBookService {
 
     // Update order in hash
     await client.hset(orderHashKey, orderId, JSON.stringify(orderData));
-
-    // Update total quantity at price level
-    const totalQty = await this.getTotalQuantityAtPrice(symbol, sideKey, price);
-    const priceDecimal = new Decimal(price);
-    if (priceDecimal.isNaN()) {
-      throw new Error(`Invalid price format: ${price} for order ${orderId}`);
-    }
-    await client.zadd(
-      `orderbook:${symbol}:${sideKey}`,
-      priceDecimal.toNumber(),
-      `${price}:${totalQty}`,
-    );
 
     console.log(
       `🔄 Updated order ${orderId} remaining qty to ${newRemainingQty}`,
