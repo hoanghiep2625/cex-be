@@ -7,7 +7,6 @@ services:
       - /srv/tahoanghiep/env/api-cex-tahoanghiep.env
     expose:
       - '3000'
-      - '8080'
     networks:
       - traefik-net
       - postgres-net
@@ -15,16 +14,11 @@ services:
     labels:
       - traefik.enable=true
       - traefik.docker.network=traefik-net
-      # API routes (port 3000)
-      - traefik.http.routers.api-cex-tahoanghiep.rule=Host(`api-cex.tahoanghiep.com`) && !PathPrefix(`/ws`)
+      # Single router for both API & WebSocket (both on port 3000)
+      - traefik.http.routers.api-cex-tahoanghiep.rule=Host(`api-cex.tahoanghiep.com`)
       - traefik.http.routers.api-cex-tahoanghiep.entrypoints=websecure
       - traefik.http.routers.api-cex-tahoanghiep.tls.certresolver=le
       - traefik.http.services.api-cex-tahoanghiep.loadbalancer.server.port=3000
-      # WebSocket routes (port 8080)
-      - traefik.http.routers.api-cex-tahoanghiep-ws.rule=Host(`api-cex.tahoanghiep.com`) && PathPrefix(`/ws`)
-      - traefik.http.routers.api-cex-tahoanghiep-ws.entrypoints=websecure
-      - traefik.http.routers.api-cex-tahoanghiep-ws.tls.certresolver=le
-      - traefik.http.services.api-cex-tahoanghiep-ws.loadbalancer.server.port=8080
 
 networks:
   traefik-net:

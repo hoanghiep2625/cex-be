@@ -4,6 +4,7 @@ import { ValidationPipe } from '@nestjs/common';
 import { ResponseInterceptor } from './common/interceptors/response.interceptor';
 import { GlobalExceptionFilter } from './common/filters/global-exception.filter';
 import * as cookieParser from 'cookie-parser';
+import { OrderBookGateway } from './modules/redis/orderbook.gateway';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
@@ -39,6 +40,27 @@ async function bootstrap() {
   // Global Exception Filter
   app.useGlobalFilters(new GlobalExceptionFilter());
 
-  await app.listen(process.env.PORT ?? 3000);
+  // ✅ WebSocket upgrade handler
+  const server = app.getHttpServer();
+  const orderBookGateway = app.get(OrderBookGateway);
+
+  server.on('upgrade', (req: any, socket: any, head: any) => {
+    if (req.url.startsWith('/ws')) {
+      const { WebSocketServer } = require('ws');
+      const wss = new WebSocketServer({ noServer: true });
+
+      wss.handleUpgrade(req, socket, head, (ws: any) => {
+        // Extract symbol from query or default to BTCUSDT
+        const url = new URL(req.url, `http://${req.headers.host}`);
+        const symbol = url.searchParams.get('symbol') || 'BTCUSDT';
+        orderBookGateway.handleConnection(ws, symbol);
+      });
+    }
+  });
+
+  await app.listen(process.env.PORT ?? 3000, () => {
+    console.log('✅ NestJS API running on :3000');
+    console.log('✅ WebSocket server ready on :3000/ws');
+  });
 }
 bootstrap();
