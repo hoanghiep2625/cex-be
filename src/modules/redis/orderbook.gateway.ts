@@ -1,139 +1,61 @@
-import { Injectable, Logger, OnModuleDestroy } from '@nestjs/common';
-import * as WebSocket from 'ws';
+import { Injectable, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
 import { OrderBookService } from './orderbook.service';
+import { Server, WebSocket } from 'ws';
 
 @Injectable()
-export class OrderBookGateway implements OnModuleDestroy {
-  private wss: WebSocket.Server | null = null;
-  private logger = new Logger('OrderBookGateway');
-  private clients = new Map<WebSocket, Set<string>>();
-  private intervals = new Map<string, NodeJS.Timer>();
-  private wsPort = parseInt(process.env.WS_PORT || '8080', 10);
+export class OrderBookGateway implements OnModuleInit, OnModuleDestroy {
+  private wss?: Server;
 
-  constructor(private readonly orderBookService: OrderBookService) {
-    this.initWebSocketServer();
-  }
+  constructor(private readonly orderBookService: OrderBookService) {}
 
-  private initWebSocketServer() {
-    try {
-      this.wss = new WebSocket.Server({ port: this.wsPort });
+  onModuleInit() {
+    // Khởi tạo WS server khi module start
+    this.wss = new Server({ port: 8080 }, () => {
+      console.log('WS server listening ws://localhost:8080');
+    });
 
-      this.wss.on('connection', (ws: WebSocket) => {
-        this.logger.log('🔗 Client connected');
-        this.clients.set(ws, new Set());
+    this.wss.on('connection', (ws: WebSocket) => {
+      console.log('New client connected');
 
-        ws.on('message', (message: string) => {
-          this.handleMessage(ws, message);
-        });
+      const sendOrderBook = async (symbol: string) => {
+        try {
+          const orderBook =
+            await this.orderBookService.getOrderBookDepth(symbol);
+          ws.send(JSON.stringify({ symbol, orderBook }));
+        } catch (e) {
+          console.error('sendOrderBook error:', e);
+        }
+      };
 
-        ws.on('close', () => {
-          this.logger.log('🔌 Client disconnected');
-          this.clients.delete(ws);
-        });
+      // Lắng nghe message từ client
+      ws.on('message', async (raw) => {
+        try {
+          const message = raw.toString(); // Buffer -> string
+          const { symbol } = JSON.parse(message);
+          if (!symbol) return;
 
-        ws.on('error', (error) => {
-          this.logger.error(`❌ WebSocket error: ${error.message}`);
-        });
+          console.log(`Client subscribed to ${symbol} order book`);
+
+          // Gửi lần đầu
+          await sendOrderBook(symbol);
+
+          // Gửi mỗi giây
+          const interval = setInterval(() => sendOrderBook(symbol), 1000);
+
+          ws.once('close', () => {
+            clearInterval(interval);
+            console.log('Client disconnected');
+          });
+        } catch (e) {
+          console.error('Invalid message:', e);
+        }
       });
-
-      this.logger.log(`✅ WebSocket server running on port ${this.wsPort}`);
-    } catch (err) {
-      this.logger.error(
-        `❌ Failed to start WS server on ${this.wsPort}: ${err}`,
-      );
-    }
+    });
   }
 
   onModuleDestroy() {
-    // Cleanup on app shutdown
-    if (this.wss) {
-      this.wss.close();
-      this.logger.log('🧹 WebSocket server closed');
-    }
-    // Clear intervals
-    this.intervals.forEach((interval) => clearInterval(interval as any));
-    this.intervals.clear();
-  }
-
-  private async handleMessage(ws: WebSocket, message: string) {
-    try {
-      const data = JSON.parse(message);
-      const { type, symbol, limit = 20 } = data;
-
-      if (type === 'subscribe') {
-        this.handleSubscribe(ws, symbol);
-      } else if (type === 'unsubscribe') {
-        this.handleUnsubscribe(ws, symbol);
-      } else if (type === 'best') {
-        const best = await this.orderBookService.getBestBidAsk(symbol);
-        ws.send(JSON.stringify({ type: 'best', data: best }));
-      } else if (type === 'depth') {
-        const depth = await this.orderBookService.getOrderBookDepth(
-          symbol,
-          limit,
-        );
-        ws.send(JSON.stringify({ type: 'depth', data: depth }));
-      }
-    } catch (error) {
-      this.logger.error(`❌ Error handling message: ${error.message}`);
-      ws.send(JSON.stringify({ type: 'error', message: error.message }));
-    }
-  }
-
-  private handleSubscribe(ws: WebSocket, symbol: string) {
-    const subscriptions = this.clients.get(ws);
-    if (!subscriptions.has(symbol)) {
-      subscriptions.add(symbol);
-      this.logger.log(`✅ Client subscribed to ${symbol}`);
-
-      // Stream updates every 1 second
-      const intervalKey = `${symbol}`;
-      if (!this.intervals.has(intervalKey)) {
-        const interval = setInterval(async () => {
-          const depth = await this.orderBookService.getOrderBookDepth(symbol);
-
-          // Send to all clients subscribed to this symbol
-          this.clients.forEach((subs, client) => {
-            if (subs.has(symbol) && client.readyState === WebSocket.OPEN) {
-              client.send(
-                JSON.stringify({ type: 'update', symbol, data: depth }),
-              );
-            }
-          });
-        }, 1000);
-
-        this.intervals.set(intervalKey, interval);
-      }
-
-      ws.send(JSON.stringify({ type: 'subscribed', symbol }));
-    }
-  }
-
-  private handleUnsubscribe(ws: WebSocket, symbol: string) {
-    const subscriptions = this.clients.get(ws);
-    subscriptions.delete(symbol);
-    this.logger.log(`❌ Client unsubscribed from ${symbol}`);
-
-    // Clear interval if no more subscribers
-    const hasSubscribers = Array.from(this.clients.values()).some((subs) =>
-      subs.has(symbol),
-    );
-    if (!hasSubscribers) {
-      const interval = this.intervals.get(symbol);
-      if (interval) {
-        clearInterval(interval as any);
-        this.intervals.delete(symbol);
-      }
-    }
-
-    ws.send(JSON.stringify({ type: 'unsubscribed', symbol }));
-  }
-
-  broadcast(symbol: string, data: any) {
-    this.clients.forEach((subs, client) => {
-      if (subs.has(symbol) && client.readyState === WebSocket.OPEN) {
-        client.send(JSON.stringify({ type: 'update', symbol, data }));
-      }
-    });
+    // Đóng WS server khi app shutdown
+    this.wss?.clients.forEach((client) => client.close());
+    this.wss?.close();
   }
 }
