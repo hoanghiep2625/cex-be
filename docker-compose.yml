@@ -15,11 +15,13 @@ services:
     labels:
       - traefik.enable=true
       - traefik.docker.network=traefik-net
-      - traefik.http.routers.api-cex-tahoanghiep.rule=Host(`api-cex.tahoanghiep.com`)
+      # API routes (port 3000)
+      - traefik.http.routers.api-cex-tahoanghiep.rule=Host(`api-cex.tahoanghiep.com`) && !PathPrefix(`/ws`)
       - traefik.http.routers.api-cex-tahoanghiep.entrypoints=websecure
       - traefik.http.routers.api-cex-tahoanghiep.tls.certresolver=le
       - traefik.http.services.api-cex-tahoanghiep.loadbalancer.server.port=3000
-      - traefik.http.routers.api-cex-tahoanghiep-ws.rule=Host(`api-cex.tahoanghiep.com`) && PathPrefix(`/`)
+      # WebSocket routes (port 8080)
+      - traefik.http.routers.api-cex-tahoanghiep-ws.rule=Host(`api-cex.tahoanghiep.com`) && PathPrefix(`/ws`)
       - traefik.http.routers.api-cex-tahoanghiep-ws.entrypoints=websecure
       - traefik.http.routers.api-cex-tahoanghiep-ws.tls.certresolver=le
       - traefik.http.services.api-cex-tahoanghiep-ws.loadbalancer.server.port=8080
