@@ -71,9 +71,11 @@ async function bootstrap() {
             `[WS] Routing to MarketDataGateway for symbol: ${symbol}, type: ${type}`,
           );
           marketDataGateway.handleConnection(ws, symbol, type);
-        } else {
-          console.log(`[WS] Routing to OrderBookGateway for symbol: ${symbol}`);
-          orderBookGateway.handleConnection(ws, symbol);
+        } else if (req.url.includes('/ws')) {
+          console.log(
+            `[WS] Routing to OrderBookGateway for symbol: ${symbol}, type: ${type}`,
+          );
+          orderBookGateway.handleConnection(ws, symbol, type);
         }
       });
     }

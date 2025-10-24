@@ -23,14 +23,14 @@ export class OrderBookGateway implements OnModuleInit, OnModuleDestroy {
   }
 
   // Called by gateway middleware
-  async handleConnection(ws: any, symbol: string) {
+  async handleConnection(ws: any, symbol: string, type: string = 'spot') {
     const id = Math.random().toString(36);
     this.clients.set(id, ws);
-    this.logger.log(`🔗 Client connected: ${id}`);
+    this.logger.log(`🔗 Client connected: ${id} (${symbol}, ${type})`);
 
     // Send initial data
     const orderBook = await this.orderBookService.getOrderBookDepth(symbol);
-    ws.send(JSON.stringify({ symbol, orderBook }));
+    ws.send(JSON.stringify({ symbol, type, orderBook }));
 
     // Stream updates every 1 second
     const interval = setInterval(async () => {
@@ -38,7 +38,7 @@ export class OrderBookGateway implements OnModuleInit, OnModuleDestroy {
         const orderBook = await this.orderBookService.getOrderBookDepth(symbol);
         if (ws.readyState === 1) {
           // 1 = OPEN
-          ws.send(JSON.stringify({ symbol, orderBook }));
+          ws.send(JSON.stringify({ symbol, type, orderBook }));
         }
       } catch (err) {
         this.logger.error('Stream error:', err);
