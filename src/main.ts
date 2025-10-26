@@ -7,6 +7,7 @@ import * as cookieParser from 'cookie-parser';
 import { OrderBookGateway } from 'src/modules/websocket/orderbook.gateway';
 import { RecentTradesGateway } from 'src/modules/websocket/recenttrades.gateway';
 import { MarketDataGateway } from 'src/modules/websocket/marketdata.gateway';
+import { OrderGateway } from 'src/modules/websocket/order.gateway';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
@@ -47,6 +48,7 @@ async function bootstrap() {
   const orderBookGateway = app.get(OrderBookGateway);
   const recentTradesGateway = app.get(RecentTradesGateway);
   const marketDataGateway = app.get(MarketDataGateway);
+  const orderGateway = app.get(OrderGateway);
 
   server.on('upgrade', (req: any, socket: any, head: any) => {
     console.log(`[WS] Upgrade request: ${req.url}`);
@@ -55,13 +57,19 @@ async function bootstrap() {
       const wss = new WebSocketServer({ noServer: true });
 
       wss.handleUpgrade(req, socket, head, (ws: any) => {
-        // Extract symbol and type from query params
+        // Extract listenKey from query params (Binance style)
         const url = new URL(req.url, `http://${req.headers.host}`);
+        const listenKey = url.searchParams.get('listenKey');
         const symbol = url.searchParams.get('symbol') || 'BTCUSDT';
         const type = url.searchParams.get('type') || 'spot';
 
         // Route to appropriate gateway based on path
-        if (req.url.includes('/ws/trades')) {
+        if (req.url.includes('/ws/orders')) {
+          console.log(
+            `[WS] Routing to OrderGateway (ListenKey: ${listenKey ? 'provided' : 'missing'})`,
+          );
+          orderGateway.handleConnection(ws, symbol, listenKey, type);
+        } else if (req.url.includes('/ws/trades')) {
           console.log(
             `[WS] Routing to RecentTradesGateway for symbol: ${symbol}`,
           );

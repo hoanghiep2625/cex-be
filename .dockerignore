@@ -3,14 +3,14 @@ npm-debug.log
 dist
 .env
 .env.local
-.env.*.local
+.env.local
 .git
 .gitignore
 README.md
 .vscode
 .idea
 .DS_Store
-*.log
+.log
 coverage
 .nyc_output
 test

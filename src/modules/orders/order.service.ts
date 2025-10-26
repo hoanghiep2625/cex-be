@@ -553,4 +553,41 @@ export class OrderService {
       },
     );
   }
+
+  /**
+   * 📋 Get pending orders waiting for matching (NEW or PARTIALLY_FILLED)
+   * @param user_id - User ID
+   * @param symbol - Optional: filter by trading pair
+   */
+  async getPendingOrders(user_id: number, symbol?: string) {
+    const query = this.orderRepository
+      .createQueryBuilder('order')
+      .where('order.user_id = :user_id', { user_id: user_id.toString() })
+      .andWhere('order.status IN (:...statuses)', {
+        statuses: [OrderStatus.NEW, OrderStatus.PARTIALLY_FILLED],
+      })
+      .orderBy('order.created_at', 'DESC');
+
+    if (symbol) {
+      query.andWhere('order.symbol = :symbol', { symbol });
+    }
+
+    const orders = await query.getMany();
+
+    return orders.map((order) => ({
+      id: order.id,
+      symbol: order.symbol,
+      side: order.side,
+      type: order.type,
+      price: order.price,
+      qty: order.qty,
+      filled_qty: order.filled_qty,
+      remaining_qty: new Decimal(order.qty).minus(order.filled_qty).toString(),
+      status: order.status,
+      tif: order.tif,
+      client_order_id: order.client_order_id,
+      created_at: order.created_at,
+      updated_at: order.updated_at,
+    }));
+  }
 }
