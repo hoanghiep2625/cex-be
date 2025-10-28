@@ -224,14 +224,13 @@ export class MatchingEngineService {
         break;
       }
 
-      // Khớp với từng lệnh ở mức giá này (WITH PESSIMISTIC LOCKING)
+      // Khớp với từng lệnh ở mức giá này (WITH DB VALIDATION)
       for (const existingOrder of ordersAtPrice) {
         if (remainingQty.lte(0)) break;
 
-        // 🔒 PESSIMISTIC LOCK: Lock maker order trong DB
+        // ✅ Fetch maker order từ DB để validate
         const lockedMaker = await this.orderRepository.findOne({
           where: { id: existingOrder.orderId },
-          lock: { mode: 'pessimistic_write' },
         });
 
         if (!lockedMaker) {

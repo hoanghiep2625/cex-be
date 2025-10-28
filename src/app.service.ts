@@ -7,6 +7,7 @@ import {
   Balance,
   WalletType,
 } from './modules/balances/entities/balance.entity';
+import { RedisService } from './modules/redis/redis.service';
 
 @Injectable()
 export class AppService {
@@ -18,6 +19,7 @@ export class AppService {
     @InjectRepository(Balance)
     private balanceRepository: Repository<Balance>,
     private dataSource: DataSource,
+    private redisService: RedisService,
   ) {}
 
   getHello(): string {
@@ -36,10 +38,41 @@ export class AppService {
     orders_deleted: number;
     trades_deleted: number;
     balances_updated: any[];
+    redis_orderbook_cleared: boolean;
   }> {
-    return await this.dataSource.transaction(async (manager) => {
+    // Retry logic để handle deadlock
+    let retries = 3;
+    while (retries > 0) {
       try {
-        // Xoá tất cả orders
+        return await this._resetDataTransaction(currencies, userIds);
+      } catch (error) {
+        if (error.message.includes('deadlock') && retries > 1) {
+          console.log(
+            `⚠️ Deadlock detected, retrying... (${retries - 1} left)`,
+          );
+          retries--;
+          await this.sleep(100); // Wait 100ms before retry
+          continue;
+        }
+        throw new BadRequestException(`Failed to reset data: ${error.message}`);
+      }
+    }
+  }
+
+  private async _resetDataTransaction(
+    currencies: { currency: string; amount: string }[],
+    userIds: number[],
+  ): Promise<{
+    message: string;
+    orders_deleted: number;
+    trades_deleted: number;
+    balances_updated: any[];
+    redis_orderbook_cleared: boolean;
+  }> {
+    return await this.dataSource.transaction(
+      'READ COMMITTED', // Lower isolation level to reduce deadlocks
+      async (manager) => {
+        // Step 1: Xoá orders và trades (không lock balances)
         const deleteOrdersResult = await manager
           .createQueryBuilder()
           .delete()
@@ -47,7 +80,6 @@ export class AppService {
           .execute();
         const ordersDeleted = deleteOrdersResult.affected || 0;
 
-        // Xoá tất cả trades
         const deleteTradesResult = await manager
           .createQueryBuilder()
           .delete()
@@ -55,7 +87,26 @@ export class AppService {
           .execute();
         const tradesDeleted = deleteTradesResult.affected || 0;
 
-        // Update balances cho users
+        // Step 2: Clear Redis orderbook (all symbols)
+        let redisCleared = false;
+        try {
+          const client = this.redisService.getClient();
+          const orderbookKeys = await client.keys('orderbook:*');
+
+          if (orderbookKeys.length > 0) {
+            await client.del(...orderbookKeys);
+            console.log(
+              `🧹 Cleared ${orderbookKeys.length} orderbook keys from Redis`,
+            );
+          }
+
+          redisCleared = true;
+        } catch (error) {
+          console.error(`❌ Failed to clear Redis orderbook: ${error.message}`);
+          // Continue anyway - don't fail entire reset
+        }
+
+        // Step 3: Update balances - xử lý tuần tự từng user để tránh deadlock
         const balancesUpdated = [];
 
         for (const userId of userIds) {
@@ -63,28 +114,19 @@ export class AppService {
 
           // Loop qua từng currency
           for (const { currency, amount } of currencies) {
-            let balance = await manager.findOne(Balance, {
-              where: {
-                user_id: userId,
-                currency: currency,
-                wallet_type: WalletType.SPOT,
-              },
-            });
-
-            if (balance) {
-              balance.available = amount;
-              balance.locked = '0';
-              await manager.save(balance);
-            } else {
-              balance = manager.create(Balance, {
-                user_id: userId,
-                currency: currency,
-                wallet_type: WalletType.SPOT,
-                available: amount,
-                locked: '0',
-              });
-              await manager.save(balance);
-            }
+            // Use UPSERT to avoid deadlock
+            await manager.query(
+              `
+              INSERT INTO balances (user_id, currency, wallet_type, available, locked, created_at, updated_at)
+              VALUES ($1, $2, $3, $4, $5, NOW(), NOW())
+              ON CONFLICT (user_id, currency, wallet_type)
+              DO UPDATE SET
+                available = $4,
+                locked = $5,
+                updated_at = NOW()
+            `,
+              [userId, currency, WalletType.SPOT, amount, '0'],
+            );
 
             userBalances[currency] = amount;
           }
@@ -97,10 +139,13 @@ export class AppService {
           orders_deleted: ordersDeleted,
           trades_deleted: tradesDeleted,
           balances_updated: balancesUpdated,
+          redis_orderbook_cleared: redisCleared,
         };
-      } catch (error) {
-        throw new BadRequestException(`Failed to reset data: ${error.message}`);
-      }
-    });
+      },
+    );
+  }
+
+  private sleep(ms: number): Promise<void> {
+    return new Promise((resolve) => setTimeout(resolve, ms));
   }
 }

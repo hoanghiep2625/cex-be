@@ -265,7 +265,7 @@ export class OrderBookService {
    */
   async getOrderBookDepth(
     symbol: string,
-    limit: number = 20,
+    limit: number = 19,
   ): Promise<OrderBookSnapshot> {
     const client = this.redisService.getClient();
 
