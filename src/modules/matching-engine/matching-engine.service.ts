@@ -1,5 +1,6 @@
 import { Injectable, Inject, forwardRef } from '@nestjs/common';
-
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
 import { OrderBookService } from '../redis/orderbook.service';
 import {
   Order,
@@ -17,6 +18,9 @@ import { RedisService } from 'src/modules/redis/redis.service';
 
 @Injectable()
 export class MatchingEngineService {
+  // Symbol-level queue để serialize matching operations (FIX RACE CONDITION)
+  private symbolQueues = new Map<string, Promise<void>>();
+
   constructor(
     private readonly orderBookService: OrderBookService,
     @Inject(forwardRef(() => OrderService))
@@ -24,9 +28,38 @@ export class MatchingEngineService {
     private readonly tradeService: TradeService,
     private readonly balanceService: BalanceService,
     private readonly redisService: RedisService,
+    @InjectRepository(Order)
+    private readonly orderRepository: Repository<Order>,
   ) {}
 
   async matchLimitOrder(order: Order): Promise<void> {
+    // Enqueue matching per symbol để prevent race conditions
+    return this.enqueueMatching(order.symbol, () =>
+      this._matchLimitOrder(order),
+    );
+  }
+
+  // Queue manager - serialize operations per symbol
+  private async enqueueMatching(
+    symbol: string,
+    fn: () => Promise<void>,
+  ): Promise<void> {
+    const current = this.symbolQueues.get(symbol);
+    const next = current ? current.then(fn, fn) : fn();
+
+    this.symbolQueues.set(symbol, next);
+
+    try {
+      await next;
+    } finally {
+      if (this.symbolQueues.get(symbol) === next) {
+        this.symbolQueues.delete(symbol);
+      }
+    }
+  }
+
+  // Actual matching logic (renamed, with pessimistic locking)
+  private async _matchLimitOrder(order: Order): Promise<void> {
     const { bestBid, bestAsk } = await this.orderBookService.getBestBidAsk(
       order.symbol,
     );
@@ -139,7 +172,7 @@ export class MatchingEngineService {
   }
 
   /**
-   * 🎯 Khớp lệnh ở nhiều mức giá
+   * 🎯 Khớp lệnh ở nhiều mức giá (WITH PESSIMISTIC LOCKING)
    * @param order - Lệnh mới
    * @returns Số lượng còn lại sau khi khớp
    */
@@ -191,14 +224,46 @@ export class MatchingEngineService {
         break;
       }
 
-      // Khớp với từng lệnh ở mức giá này
+      // Khớp với từng lệnh ở mức giá này (WITH PESSIMISTIC LOCKING)
       for (const existingOrder of ordersAtPrice) {
         if (remainingQty.lte(0)) break;
 
-        const existingRemainingQty = new Decimal(existingOrder.remainingQty);
-        const matchQty = remainingQty.lt(existingRemainingQty)
+        // 🔒 PESSIMISTIC LOCK: Lock maker order trong DB
+        const lockedMaker = await this.orderRepository.findOne({
+          where: { id: existingOrder.orderId },
+          lock: { mode: 'pessimistic_write' },
+        });
+
+        if (!lockedMaker) {
+          console.log(
+            `⚠️ Maker ${existingOrder.orderId} not found in DB - skipping`,
+          );
+          continue;
+        }
+
+        // ✅ VALIDATE: Check actual remaining từ DB (not Redis)
+        const actualMakerRemaining = new Decimal(lockedMaker.qty).minus(
+          lockedMaker.filled_qty,
+        );
+
+        if (actualMakerRemaining.lte(0)) {
+          console.log(
+            `⚠️ Maker ${existingOrder.orderId} already fully filled - removing from Redis`,
+          );
+          // Remove from Redis vì đã filled
+          await this.orderBookService.removeOrder(
+            order.symbol,
+            opposingSide,
+            matchPrice,
+            existingOrder.orderId,
+          );
+          continue;
+        }
+
+        // Use actualMakerRemaining instead of Redis remainingQty
+        const matchQty = remainingQty.lt(actualMakerRemaining)
           ? remainingQty
-          : existingRemainingQty;
+          : actualMakerRemaining;
 
         console.log(
           `✅ MATCH: ${incomingSide} #${order.id} <-> ${opposingSide} #${existingOrder.orderId} @ ${matchPrice} for ${matchQty}`,
@@ -206,7 +271,7 @@ export class MatchingEngineService {
 
         // Update số lượng còn lại của cả 2 lệnh
         remainingQty = remainingQty.minus(matchQty);
-        const existingNewQty = existingRemainingQty.minus(matchQty);
+        const existingNewQty = actualMakerRemaining.minus(matchQty);
 
         // 1️⃣ Cập nhật số dư cho cả 2 users
         await this.updateBalances(
@@ -227,7 +292,7 @@ export class MatchingEngineService {
 
         // 2️⃣ Thêm bản ghi trade
         await this.createTradeRecord(
-          order.symbol, // Đây là cặp giao dịch
+          order.symbol,
           incomingSide === 'BUY' ? existingOrder.orderId : order.id,
           incomingSide === 'BUY' ? order.id : existingOrder.orderId,
           incomingSide === 'BUY'
@@ -258,18 +323,14 @@ export class MatchingEngineService {
         });
 
         // 3️⃣ Cập nhật order status của maker order
-        // Maker order = existingOrder (lệnh cũ trong order book)
-        // Taker order = order (lệnh mới)
-
-        // Tính filled quantity của maker = tất cả lệnh của maker (quantity) - remaining (existingNewQty)
-        const makerFilledQty = new Decimal(existingOrder.quantity).minus(
+        const makerFilledQty = new Decimal(lockedMaker.qty).minus(
           existingNewQty,
         );
 
         await this.updateOrderStatus(
           existingOrder.orderId,
           makerFilledQty,
-          new Decimal(existingOrder.quantity),
+          new Decimal(lockedMaker.qty),
         );
 
         // Update lệnh cũ trong order book

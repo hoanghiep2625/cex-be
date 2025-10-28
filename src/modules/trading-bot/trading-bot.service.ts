@@ -8,6 +8,7 @@ import {
   OrderSide,
   OrderType,
   OrderStatus,
+  TimeInForce,
 } from '../orders/entities/order.entity';
 import { OrderService } from '../orders/order.service';
 import { SymbolType } from '../symbols/enums/symbol-type.enum';
@@ -28,6 +29,10 @@ export interface BotConfig {
   updateInterval: number; // ms - thời gian update giá
   tradeInterval: number; // ms - thời gian bot trader đặt lệnh
   priceSource: 'binance'; // Nguồn giá
+  makerOrderType: OrderType; // LIMIT | MARKET
+  makerTimeInForce: TimeInForce; // GTC | IOC | FOK
+  takerOrderType: OrderType; // LIMIT | MARKET
+  takerTimeInForce?: TimeInForce; // GTC | IOC | FOK (optional for MARKET)
 }
 
 @Injectable()
@@ -43,6 +48,10 @@ export class TradingBotService implements OnModuleInit {
     updateInterval: 5000, // Update giá mỗi 5s
     tradeInterval: 10000, // Trader bot đặt lệnh mỗi 10s
     priceSource: 'binance',
+    makerOrderType: OrderType.LIMIT, // Maker dùng LIMIT
+    makerTimeInForce: TimeInForce.GTC, // Maker dùng GTC
+    takerOrderType: OrderType.LIMIT, // Taker dùng MARKET
+    takerTimeInForce: TimeInForce.GTC, // MARKET không cần tif
   };
 
   private lastPrices: Map<string, number> = new Map(); // Track giá trước đó
@@ -169,6 +178,8 @@ export class TradingBotService implements OnModuleInit {
       OrderSide.BUY,
       bidPrice,
       baseQuantity,
+      this.config.makerOrderType,
+      this.config.makerTimeInForce,
     );
 
     const sellOrderId = await this.placeBotOrder(
@@ -177,6 +188,8 @@ export class TradingBotService implements OnModuleInit {
       OrderSide.SELL,
       askPrice,
       baseQuantity,
+      this.config.makerOrderType,
+      this.config.makerTimeInForce,
     );
 
     // Lưu order IDs
@@ -186,7 +199,7 @@ export class TradingBotService implements OnModuleInit {
     });
 
     this.logger.log(
-      `✅ ${binanceSymbol}: Placed BUY @ ${bidPrice.toFixed(2)} (${baseQuantity}) | SELL @ ${askPrice.toFixed(2)} (${baseQuantity})`,
+      `✅ ${binanceSymbol}: Placed ${this.config.makerOrderType} BUY @ ${bidPrice.toFixed(2)} (${baseQuantity}) | SELL @ ${askPrice.toFixed(2)} (${baseQuantity})`,
     );
   }
 
@@ -194,7 +207,7 @@ export class TradingBotService implements OnModuleInit {
     try {
       const response = await axios.get<BinanceTickerPrice>(
         `https://api.binance.com/api/v3/ticker/price?symbol=${symbol}`,
-        { timeout: 5000 },
+        { timeout: 3000 },
       );
 
       return parseFloat(response.data.price);
@@ -212,19 +225,32 @@ export class TradingBotService implements OnModuleInit {
     side: OrderSide,
     price: number,
     quantity: number,
+    orderType: OrderType,
+    timeInForce?: TimeInForce,
   ): Promise<string> {
     try {
       // Format price và quantity to remove trailing zeros
       const formattedPrice = parseFloat(price.toFixed(8)).toString();
       const formattedQty = parseFloat(quantity.toFixed(8)).toString();
 
-      const order = await this.orderService.createOrder(userId, {
+      const orderData: any = {
         symbol,
         side,
-        type: OrderType.LIMIT,
-        price: formattedPrice,
+        type: orderType,
         qty: formattedQty,
-      });
+      };
+
+      // Chỉ thêm price nếu là LIMIT order
+      if (orderType === OrderType.LIMIT) {
+        orderData.price = formattedPrice;
+      }
+
+      // Chỉ thêm tif nếu có
+      if (timeInForce) {
+        orderData.tif = timeInForce;
+      }
+
+      const order = await this.orderService.createOrder(userId, orderData);
 
       return order.id;
     } catch (err) {
@@ -421,24 +447,40 @@ export class TradingBotService implements OnModuleInit {
     }
 
     try {
-      // Đặt MARKET order để khớp ngay với market maker bot
       const formattedQty = parseFloat(quantity.toFixed(8)).toString();
       const estimatedCost =
         side === OrderSide.BUY ? quantity * currentPrice : 0;
 
       this.logger.log(
-        `🔄 Attempting ${side} ${formattedQty} ${binanceSymbol} @ MARKET (Est. cost: ${estimatedCost.toFixed(2)} USDT, Available: ${availableUsdt.toFixed(2)} USDT)`,
+        `🔄 Attempting ${side} ${formattedQty} ${binanceSymbol} @ ${this.config.takerOrderType} (Est. cost: ${estimatedCost.toFixed(2)} USDT, Available: ${availableUsdt.toFixed(2)} USDT)`,
       );
 
-      await this.orderService.createOrder(this.config.botTraderUserId, {
+      const orderData: any = {
         symbol: binanceSymbol,
         side,
-        type: OrderType.MARKET,
+        type: this.config.takerOrderType,
         qty: formattedQty,
-      });
+      };
+
+      // Nếu là LIMIT order, cần thêm price
+      if (this.config.takerOrderType === OrderType.LIMIT) {
+        const tickSize = parseFloat(symbol.tick_size);
+        const limitPrice = Math.floor(currentPrice / tickSize) * tickSize;
+        orderData.price = parseFloat(limitPrice.toFixed(8)).toString();
+      }
+
+      // Nếu có tif, thêm vào
+      if (this.config.takerTimeInForce) {
+        orderData.tif = this.config.takerTimeInForce;
+      }
+
+      await this.orderService.createOrder(
+        this.config.botTraderUserId,
+        orderData,
+      );
 
       this.logger.log(
-        `✅ Trader bot: ${side} ${formattedQty} ${binanceSymbol} @ MARKET`,
+        `✅ Trader bot: ${side} ${formattedQty} ${binanceSymbol} @ ${this.config.takerOrderType}`,
       );
     } catch (err) {
       this.logger.error(

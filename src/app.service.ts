@@ -24,11 +24,18 @@ export class AppService {
     return 'Hello World!';
   }
 
-  async resetData(): Promise<{
+  async resetData(
+    currencies: { currency: string; amount: string }[] = [
+      { currency: 'BTC', amount: '100' },
+      { currency: 'USDT', amount: '1000000' },
+      { currency: 'ETH', amount: '1000' },
+    ],
+    userIds: number[] = [1, 2, 3],
+  ): Promise<{
     message: string;
     orders_deleted: number;
     trades_deleted: number;
-    balances_updated: { user_id: number; BTC: string; USDT: string }[];
+    balances_updated: any[];
   }> {
     return await this.dataSource.transaction(async (manager) => {
       try {
@@ -48,63 +55,41 @@ export class AppService {
           .execute();
         const tradesDeleted = deleteTradesResult.affected || 0;
 
-        // Update balances cho user 1 và 2
+        // Update balances cho users
         const balancesUpdated = [];
 
-        for (const userId of [1, 2]) {
-          // Cập nhật hoặc tạo BTC balance
-          let btcBalance = await manager.findOne(Balance, {
-            where: {
-              user_id: userId,
-              currency: 'BTC',
-              wallet_type: WalletType.SPOT,
-            },
-          });
+        for (const userId of userIds) {
+          const userBalances: any = { user_id: userId };
 
-          if (btcBalance) {
-            btcBalance.available = '10';
-            btcBalance.locked = '0';
-            await manager.save(btcBalance);
-          } else {
-            btcBalance = manager.create(Balance, {
-              user_id: userId,
-              currency: 'BTC',
-              wallet_type: WalletType.SPOT,
-              available: '10',
-              locked: '0',
+          // Loop qua từng currency
+          for (const { currency, amount } of currencies) {
+            let balance = await manager.findOne(Balance, {
+              where: {
+                user_id: userId,
+                currency: currency,
+                wallet_type: WalletType.SPOT,
+              },
             });
-            await manager.save(btcBalance);
+
+            if (balance) {
+              balance.available = amount;
+              balance.locked = '0';
+              await manager.save(balance);
+            } else {
+              balance = manager.create(Balance, {
+                user_id: userId,
+                currency: currency,
+                wallet_type: WalletType.SPOT,
+                available: amount,
+                locked: '0',
+              });
+              await manager.save(balance);
+            }
+
+            userBalances[currency] = amount;
           }
 
-          // Cập nhật hoặc tạo USDT balance
-          let usdtBalance = await manager.findOne(Balance, {
-            where: {
-              user_id: userId,
-              currency: 'USDT',
-              wallet_type: WalletType.SPOT,
-            },
-          });
-
-          if (usdtBalance) {
-            usdtBalance.available = '100000';
-            usdtBalance.locked = '0';
-            await manager.save(usdtBalance);
-          } else {
-            usdtBalance = manager.create(Balance, {
-              user_id: userId,
-              currency: 'USDT',
-              wallet_type: WalletType.SPOT,
-              available: '100000',
-              locked: '0',
-            });
-            await manager.save(usdtBalance);
-          }
-
-          balancesUpdated.push({
-            user_id: userId,
-            BTC: '10',
-            USDT: '100000',
-          });
+          balancesUpdated.push(userBalances);
         }
 
         return {

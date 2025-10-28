@@ -1,4 +1,4 @@
-import { Controller, Get, Post } from '@nestjs/common';
+import { Controller, Get, Post, Body } from '@nestjs/common';
 import { AppService } from './app.service';
 
 @Controller()
@@ -11,7 +11,13 @@ export class AppController {
   }
 
   @Post('reset-data')
-  async resetData() {
-    return await this.appService.resetData();
+  async resetData(
+    @Body()
+    body?: {
+      currencies?: { currency: string; amount: string }[];
+      userIds?: number[];
+    },
+  ) {
+    return await this.appService.resetData(body?.currencies, body?.userIds);
   }
 }
