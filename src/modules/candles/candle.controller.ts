@@ -14,4 +14,13 @@ export class CandleController {
   async getCandles(@Query(ValidationPipe) query: QueryCandlesDto) {
     return this.candleService.getCandles(query);
   }
+
+  /**
+   * GET /candles/status
+   * Get consumer status for debugging
+   */
+  @Get('status')
+  async getStatus() {
+    return this.candleService.getStatus();
+  }
 }

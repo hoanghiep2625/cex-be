@@ -412,4 +412,12 @@ export class CandleService implements OnModuleInit {
       console.error('❌ Error creating empty candles:', err);
     }
   }
+
+  getStatus() {
+    return {
+      isProcessing: this.isProcessing,
+      lastStreamId: this.lastStreamId,
+      timestamp: new Date().toISOString(),
+    };
+  }
 }
