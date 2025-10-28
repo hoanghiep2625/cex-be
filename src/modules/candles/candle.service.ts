@@ -348,7 +348,8 @@ export class CandleService implements OnModuleInit {
 
       for (const symbol of symbols) {
         for (const tf of timeframes) {
-          const openMs = Math.floor(now / tf.ms) * tf.ms;
+          // Tính open_time của nến hiện tại dựa trên currentMinute (đã round)
+          const openMs = Math.floor(currentMinute / tf.ms) * tf.ms;
           const openTime = new Date(openMs);
           const closeTime = new Date(openMs + tf.ms);
 
