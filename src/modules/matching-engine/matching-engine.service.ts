@@ -23,7 +23,7 @@ export class MatchingEngineService {
     private readonly orderService: OrderService,
     private readonly tradeService: TradeService,
     private readonly balanceService: BalanceService,
-    private readonly redisPub: RedisService,
+    private readonly redisService: RedisService,
   ) {}
 
   async matchLimitOrder(order: Order): Promise<void> {
@@ -241,23 +241,21 @@ export class MatchingEngineService {
           matchQty,
         );
 
-        // Phát sự kiện tạo nến sau khi khớp lệnh
-        // const symbolEntity = await this.orderService.getSymbolByCode(
-        //   order.symbol,
-        // );
-        // const quoteQuantity = new Decimal(matchPrice).times(matchQty);
-        // await this.redisPub.publish(
-        //   'trades.candle',
-        //   JSON.stringify({
-        //     symbol: order.symbol,
-        //     symbol_id: symbolEntity.id,
-        //     price: matchPrice.toString(),
-        //     baseQty: matchQty.toString(),
-        //     quoteQty: quoteQuantity.toString(),
-        //     isTakerBuy: incomingSide === 'BUY',
-        //     tsMs: Date.now(), // hoặc trade.created_at.getTime() nếu có
-        //   }),
-        // );
+        // Phát sự kiện tạo nến sau khi khớp lệnh (dùng Redis Streams)
+        const symbolEntity = await this.orderService.getSymbolByCode(
+          order.symbol,
+        );
+        const quoteQuantity = new Decimal(matchPrice).times(matchQty);
+        await this.redisService.addToStream('trades:candle', {
+          symbol: order.symbol,
+          symbol_id: symbolEntity.id.toString(),
+          type: symbolEntity.type,
+          price: matchPrice.toString(),
+          baseQty: matchQty.toString(),
+          quoteQty: quoteQuantity.toString(),
+          isTakerBuy: incomingSide === 'BUY' ? 'true' : 'false',
+          tsMs: Date.now().toString(),
+        });
 
         // 3️⃣ Cập nhật order status của maker order
         // Maker order = existingOrder (lệnh cũ trong order book)

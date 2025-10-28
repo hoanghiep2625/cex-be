@@ -1,11 +1,9 @@
 import {
   Controller,
   Post,
-  Get,
   Put,
   Param,
   Body,
-  Query,
   UseGuards,
   Request,
   HttpCode,
@@ -14,8 +12,8 @@ import {
   ValidationPipe,
 } from '@nestjs/common';
 import { OrderService } from './order.service';
-import { CreateOrderDto, OrderQueryDto } from './dto/order.dto';
-import { Order, OrderStatus } from './entities/order.entity';
+import { CreateOrderDto } from './dto/order.dto';
+import { Order } from './entities/order.entity';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 
 @Controller('orders')

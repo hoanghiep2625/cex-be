@@ -39,21 +39,36 @@ export class BalanceService {
     });
   }
 
-  // Lấy balance của 1 currency
+  // Lấy balance của 1 currency (tự động tạo nếu chưa có)
   async getUserBalance(
     user_id: number,
     currency: string,
     wallet_type: WalletType = WalletType.FUNDING,
   ): Promise<Balance> {
-    const balance = await this.balanceRepository.findOne({
+    let balance = await this.balanceRepository.findOne({
       where: { user_id, currency, wallet_type },
       relations: ['asset'],
     });
 
     if (!balance) {
-      throw new NotFoundException(
-        `Balance not found for ${currency} in ${wallet_type} wallet`,
+      // Tự động tạo balance mới với số dư 0
+      console.log(
+        `🆕 Auto-creating balance for user ${user_id}, currency ${currency}, wallet ${wallet_type}`,
       );
+      balance = this.balanceRepository.create({
+        user_id,
+        currency,
+        wallet_type,
+        available: '0',
+        locked: '0',
+      });
+      balance = await this.balanceRepository.save(balance);
+
+      // Load lại với relations
+      balance = await this.balanceRepository.findOne({
+        where: { user_id, currency, wallet_type },
+        relations: ['asset'],
+      });
     }
 
     return balance;

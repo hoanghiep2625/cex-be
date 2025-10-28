@@ -1,4 +1,7 @@
+import { IsOptional, IsString, IsEnum, IsInt, Min } from 'class-validator';
+import { Type } from 'class-transformer';
 import { CandleTimeframe } from '../entities/candle.entity';
+import { SymbolType } from '../../symbols/enums/symbol-type.enum';
 
 /**
  * DTO cho việc tạo hoặc cập nhật candle
@@ -29,6 +32,37 @@ export class GetCandlesDto {
   start_time?: Date | string;
   end_time?: Date | string;
   limit?: number;
+}
+
+/**
+ * DTO cho query candles theo symbol và type
+ */
+export class QueryCandlesDto {
+  @IsString()
+  symbol: string; // BTCUSDT, ETHUSDT
+
+  @IsOptional()
+  @IsEnum(SymbolType)
+  type?: SymbolType; // spot, futures, margin
+
+  @IsEnum(['1m', '5m', '15m', '30m', '1h', '4h', '1d', '1w', '1M'])
+  interval: CandleTimeframe; // 1m, 5m, 1h, etc
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  limit?: number; // Max số nến trả về (default: 500)
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  startTime?: number; // Epoch ms - thời điểm bắt đầu
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  endTime?: number; // Epoch ms - thời điểm kết thúc
 }
 
 /**

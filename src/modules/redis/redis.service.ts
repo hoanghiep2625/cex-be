@@ -126,6 +126,83 @@ export class RedisService implements OnModuleDestroy {
   }
 
   /**
+   * 📤 Add message to Redis Stream
+   * @param stream - Stream name (e.g., 'trades:candle')
+   * @param data - Data object
+   * @returns Message ID
+   */
+  async addToStream(stream: string, data: any): Promise<string> {
+    try {
+      const fields: string[] = [];
+      Object.entries(data).forEach(([key, value]) => {
+        fields.push(
+          key,
+          typeof value === 'string' ? value : JSON.stringify(value),
+        );
+      });
+
+      const messageId = await this.redisClient.xadd(stream, '*', ...fields);
+      return messageId;
+    } catch (error) {
+      console.error(`❌ Failed to add to stream ${stream}:`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * 📥 Read from Redis Stream
+   * @param stream - Stream name
+   * @param lastId - Last message ID (use '0' for all, '$' for new only)
+   * @param count - Max number of messages
+   * @returns Array of messages
+   */
+  async readFromStream(
+    stream: string,
+    lastId: string = '0',
+    count: number = 100,
+  ): Promise<any[]> {
+    try {
+      const result = await this.redisClient.xread(
+        'COUNT',
+        count,
+        'STREAMS',
+        stream,
+        lastId,
+      );
+
+      if (!result || result.length === 0) {
+        return [];
+      }
+
+      const messages: any[] = [];
+      for (const [, streamMessages] of result) {
+        for (const [messageId, fields] of streamMessages) {
+          const data: any = { _id: messageId };
+          for (let i = 0; i < fields.length; i += 2) {
+            const key = fields[i];
+            let value = fields[i + 1];
+
+            // Try to parse JSON
+            try {
+              value = JSON.parse(value);
+            } catch {
+              // Keep as string if not JSON
+            }
+
+            data[key] = value;
+          }
+          messages.push(data);
+        }
+      }
+
+      return messages;
+    } catch (error) {
+      console.error(`❌ Failed to read from stream ${stream}:`, error);
+      throw error;
+    }
+  }
+
+  /**
    * 🧹 Cleanup khi module destroy
    */
   async onModuleDestroy() {
