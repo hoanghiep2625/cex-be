@@ -1,4 +1,5 @@
 import { Injectable, Inject, forwardRef } from '@nestjs/common';
+
 import { OrderBookService } from '../redis/orderbook.service';
 import {
   Order,
@@ -12,6 +13,7 @@ import { TradeService } from '../trades/trade.service';
 import { BalanceService } from '../balances/balance.service';
 import { WalletType } from '../balances/entities/balance.entity';
 import Decimal from 'decimal.js';
+import { RedisService } from 'src/modules/redis/redis.service';
 
 @Injectable()
 export class MatchingEngineService {
@@ -21,6 +23,7 @@ export class MatchingEngineService {
     private readonly orderService: OrderService,
     private readonly tradeService: TradeService,
     private readonly balanceService: BalanceService,
+    private readonly redisPub: RedisService,
   ) {}
 
   async matchLimitOrder(order: Order): Promise<void> {
@@ -237,6 +240,24 @@ export class MatchingEngineService {
           new Decimal(matchPrice),
           matchQty,
         );
+
+        // Phát sự kiện tạo nến sau khi khớp lệnh
+        // const symbolEntity = await this.orderService.getSymbolByCode(
+        //   order.symbol,
+        // );
+        // const quoteQuantity = new Decimal(matchPrice).times(matchQty);
+        // await this.redisPub.publish(
+        //   'trades.candle',
+        //   JSON.stringify({
+        //     symbol: order.symbol,
+        //     symbol_id: symbolEntity.id,
+        //     price: matchPrice.toString(),
+        //     baseQty: matchQty.toString(),
+        //     quoteQty: quoteQuantity.toString(),
+        //     isTakerBuy: incomingSide === 'BUY',
+        //     tsMs: Date.now(), // hoặc trade.created_at.getTime() nếu có
+        //   }),
+        // );
 
         // 3️⃣ Cập nhật order status của maker order
         // Maker order = existingOrder (lệnh cũ trong order book)
