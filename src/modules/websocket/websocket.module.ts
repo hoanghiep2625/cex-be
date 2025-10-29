@@ -10,6 +10,7 @@ import { RecentTradesGateway } from './recenttrades.gateway';
 import { MarketDataGateway } from './marketdata.gateway';
 import { OrderGateway } from './order.gateway';
 import { CandleGateway } from './candle.gateway';
+import { TickerGateway } from './ticker.gateway';
 
 @Module({
   imports: [
@@ -26,6 +27,7 @@ import { CandleGateway } from './candle.gateway';
     MarketDataGateway,
     OrderGateway,
     CandleGateway,
+    TickerGateway,
   ],
   exports: [
     OrderBookGateway,
@@ -33,6 +35,7 @@ import { CandleGateway } from './candle.gateway';
     MarketDataGateway,
     OrderGateway,
     CandleGateway,
+    TickerGateway,
   ],
 })
 export class WebSocketModule {}

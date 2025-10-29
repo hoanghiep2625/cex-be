@@ -9,6 +9,7 @@ import { RecentTradesGateway } from 'src/modules/websocket/recenttrades.gateway'
 import { MarketDataGateway } from 'src/modules/websocket/marketdata.gateway';
 import { OrderGateway } from 'src/modules/websocket/order.gateway';
 import { CandleGateway } from 'src/modules/websocket/candle.gateway';
+import { TickerGateway } from 'src/modules/websocket/ticker.gateway';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
@@ -51,6 +52,7 @@ async function bootstrap() {
   const marketDataGateway = app.get(MarketDataGateway);
   const orderGateway = app.get(OrderGateway);
   const candleGateway = app.get(CandleGateway);
+  const tickerGateway = app.get(TickerGateway);
 
   server.on('upgrade', (req: any, socket: any, head: any) => {
     console.log(`[WS] Upgrade request: ${req.url}`);
@@ -67,7 +69,13 @@ async function bootstrap() {
         const interval = url.searchParams.get('interval') || '1m';
 
         // Route to appropriate gateway based on path
-        if (req.url.includes('/ws/candles')) {
+        if (req.url.includes('/ws/ticker')) {
+          const quoteAsset = url.searchParams.get('quote_asset') || 'USDT';
+          console.log(
+            `[WS] Routing to TickerGateway (quote: ${quoteAsset}, type: ${type})`,
+          );
+          tickerGateway.handleConnection(ws, quoteAsset, type);
+        } else if (req.url.includes('/ws/candles')) {
           console.log(
             `[WS] Routing to CandleGateway for symbol: ${symbol}, interval: ${interval}, type: ${type}`,
           );
@@ -100,6 +108,9 @@ async function bootstrap() {
   await app.listen(process.env.PORT ?? 3000, () => {
     console.log('✅ NestJS API running on :3000');
     console.log('✅ WebSocket server ready on :3000/ws');
+    console.log(
+      '✅ Ticker WebSocket ready on :3000/ws/ticker?quote_asset=USDT',
+    );
     console.log('✅ RecentTrades WebSocket ready on :3000/ws/trades');
     console.log('✅ MarketData WebSocket ready on :3000/ws/market-data');
     console.log('✅ Candles WebSocket ready on :3000/ws/candles');
