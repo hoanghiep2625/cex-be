@@ -15,6 +15,7 @@ import { BalanceService } from '../balances/balance.service';
 import { WalletType } from '../balances/entities/balance.entity';
 import Decimal from 'decimal.js';
 import { RedisService } from 'src/modules/redis/redis.service';
+import { TickerGateway } from '../websocket/ticker.gateway';
 
 @Injectable()
 export class MatchingEngineService {
@@ -30,6 +31,7 @@ export class MatchingEngineService {
     private readonly redisService: RedisService,
     @InjectRepository(Order)
     private readonly orderRepository: Repository<Order>,
+    private readonly tickerGateway: TickerGateway,
   ) {}
 
   async matchLimitOrder(order: Order): Promise<void> {
@@ -538,6 +540,9 @@ export class MatchingEngineService {
     console.log(
       `📊 Trade created: ${tradingPair} ${matchQty} @ ${matchPrice} (Maker: #${makerOrderId}, Taker: #${takerOrderId})`,
     );
+
+    // 🚀 Broadcast ticker update to WebSocket clients
+    await this.tickerGateway.broadcastTickerUpdate(tradingPair);
 
     return trade;
   }
