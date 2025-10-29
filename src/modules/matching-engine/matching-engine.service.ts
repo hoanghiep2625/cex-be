@@ -16,6 +16,11 @@ import { WalletType } from '../balances/entities/balance.entity';
 import Decimal from 'decimal.js';
 import { RedisService } from 'src/modules/redis/redis.service';
 import { TickerGateway } from '../websocket/ticker.gateway';
+import { CandleGateway } from '../websocket/candle.gateway';
+import { MarketDataGateway } from '../websocket/marketdata.gateway';
+import { OrderGateway } from '../websocket/order.gateway';
+import { OrderBookGateway } from '../websocket/orderbook.gateway';
+import { RecentTradesGateway } from '../websocket/recenttrades.gateway';
 
 @Injectable()
 export class MatchingEngineService {
@@ -32,6 +37,11 @@ export class MatchingEngineService {
     @InjectRepository(Order)
     private readonly orderRepository: Repository<Order>,
     private readonly tickerGateway: TickerGateway,
+    private readonly candleGateway: CandleGateway,
+    private readonly marketDataGateway: MarketDataGateway,
+    private readonly orderGateway: OrderGateway,
+    private readonly orderBookGateway: OrderBookGateway,
+    private readonly recentTradesGateway: RecentTradesGateway,
   ) {}
 
   async matchLimitOrder(order: Order): Promise<void> {
@@ -97,6 +107,12 @@ export class MatchingEngineService {
           console.log(
             `✅ Taker order ${order.id} updated: ${status} (${filledQty}/${order.qty})`,
           );
+
+          // 🚀 Broadcast order update to taker user
+          await this.orderGateway.broadcastPendingOrdersUpdate(
+            parseInt(order.user_id as any),
+            order.symbol,
+          );
         }
 
         // Nếu còn số lượng → thêm vào order book
@@ -147,6 +163,9 @@ export class MatchingEngineService {
       console.log(
         `✅ Added order ${order.id} to order book (${order.symbol} ${order.side} @ ${order.price})`,
       );
+
+      // 🚀 Broadcast orderbook update
+      await this.orderBookGateway.broadcastOrderBookUpdate(order.symbol);
     } catch (error) {
       console.error(
         `❌ Failed to add order ${order.id} to order book:`,
@@ -334,6 +353,12 @@ export class MatchingEngineService {
           new Decimal(lockedMaker.qty),
         );
 
+        // 🚀 Broadcast order update to maker user
+        await this.orderGateway.broadcastPendingOrdersUpdate(
+          parseInt(lockedMaker.user_id as any),
+          order.symbol,
+        );
+
         // Update lệnh cũ trong order book
         if (existingNewQty.gt(0)) {
           // Lệnh cũ còn số lượng
@@ -353,6 +378,9 @@ export class MatchingEngineService {
             existingOrder.orderId,
           );
         }
+
+        // 🚀 Broadcast orderbook update after each match
+        await this.orderBookGateway.broadcastOrderBookUpdate(order.symbol);
       }
     }
 
@@ -541,8 +569,13 @@ export class MatchingEngineService {
       `📊 Trade created: ${tradingPair} ${matchQty} @ ${matchPrice} (Maker: #${makerOrderId}, Taker: #${takerOrderId})`,
     );
 
-    // 🚀 Broadcast ticker update to WebSocket clients
-    await this.tickerGateway.broadcastTickerUpdate(tradingPair);
+    // 🚀 Broadcast updates to WebSocket clients
+    await Promise.all([
+      this.tickerGateway.broadcastTickerUpdate(tradingPair),
+      this.candleGateway.broadcastCandleUpdate(tradingPair),
+      this.marketDataGateway.broadcastMarketDataUpdate(tradingPair),
+      this.recentTradesGateway.broadcastRecentTrade(tradingPair),
+    ]);
 
     return trade;
   }

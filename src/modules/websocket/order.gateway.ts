@@ -80,30 +80,9 @@ export class OrderGateway implements OnModuleInit, OnModuleDestroy {
       this.logger.error('Failed to fetch initial orders:', err);
     }
 
-    // Stream updates every 1 second
-    const interval = setInterval(async () => {
-      try {
-        const ordersPending = await this.orderService.getPendingOrders(
-          userId,
-          symbol,
-        );
-        if (ws.readyState === 1) {
-          ws.send(
-            JSON.stringify({
-              action: 'pending_orders',
-              symbol,
-              orders: ordersPending,
-              timestamp: Date.now(),
-            }),
-          );
-        }
-      } catch (err) {
-        this.logger.error('Stream error:', err);
-      }
-    }, 1000);
+    // No polling - updates pushed when orders change via broadcastPendingOrdersUpdate()
 
     ws.on('close', () => {
-      clearInterval(interval);
       this.clients.delete(id);
       this.logger.log(`🔌 Client disconnected: ${id}`);
     });

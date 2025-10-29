@@ -18,11 +18,16 @@ export interface MarketDataUpdate {
   name: string;
 }
 
+interface MarketDataClient {
+  ws: any;
+  symbol: string;
+  type: string;
+}
+
 @Injectable()
 export class MarketDataGateway implements OnModuleInit, OnModuleDestroy {
   private logger = new Logger('MarketDataGateway');
-  private clients = new Map<string, any>();
-  private intervals = new Map<string, NodeJS.Timeout>();
+  private clients = new Map<string, MarketDataClient>();
 
   constructor(private readonly symbolService: SymbolService) {}
 
@@ -31,9 +36,6 @@ export class MarketDataGateway implements OnModuleInit, OnModuleDestroy {
   }
 
   onModuleDestroy() {
-    // Clear all intervals
-    this.intervals.forEach((interval) => clearInterval(interval));
-    this.intervals.clear();
     this.clients.clear();
     this.logger.log('🧹 MarketDataGateway destroyed');
   }
@@ -41,7 +43,7 @@ export class MarketDataGateway implements OnModuleInit, OnModuleDestroy {
   // Called by gateway middleware
   async handleConnection(ws: any, symbol: string, type: string = 'spot') {
     const id = Math.random().toString(36);
-    this.clients.set(id, ws);
+    this.clients.set(id, { ws, symbol, type });
     this.logger.log(
       `🔗 MarketData Client connected: ${id} for symbol: ${symbol}, type: ${type}`,
     );
@@ -60,27 +62,9 @@ export class MarketDataGateway implements OnModuleInit, OnModuleDestroy {
       );
     }
 
-    // Stream updates every 1 second
-    const interval = setInterval(async () => {
-      try {
-        if (ws.readyState === 1) {
-          // 1 = OPEN
-          const marketData = await this.getMarketData(symbol, type);
-          ws.send(JSON.stringify({ symbol, type, data: marketData }));
-        }
-      } catch (err) {
-        this.logger.error(`❌ Stream error for ${symbol}:`, err);
-      }
-    }, 1000);
-
-    this.intervals.set(id, interval);
+    // No polling - updates pushed when trades happen via broadcastMarketDataUpdate()
 
     ws.on('close', () => {
-      const intervalId = this.intervals.get(id);
-      if (intervalId) {
-        clearInterval(intervalId);
-        this.intervals.delete(id);
-      }
       this.clients.delete(id);
       this.logger.log(`🔌 MarketData Client disconnected: ${id}`);
     });
@@ -88,6 +72,42 @@ export class MarketDataGateway implements OnModuleInit, OnModuleDestroy {
     ws.on('error', (err: any) => {
       this.logger.error(`❌ MarketData Client error for ${id}: ${err.message}`);
     });
+  }
+
+  /**
+   * Broadcast market data update to all connected clients for a symbol
+   * Called when a trade happens
+   */
+  async broadcastMarketDataUpdate(symbol: string): Promise<void> {
+    try {
+      // Find all clients subscribed to this symbol
+      for (const [id, client] of this.clients) {
+        if (client.symbol === symbol && client.ws.readyState === 1) {
+          const marketData = await this.getMarketData(
+            client.symbol,
+            client.type,
+          );
+
+          client.ws.send(
+            JSON.stringify({
+              symbol: client.symbol,
+              type: client.type,
+              data: marketData,
+              action: 'trade_update',
+              timestamp: Date.now(),
+            }),
+          );
+        }
+      }
+
+      if (this.clients.size > 0) {
+        this.logger.log(
+          `📊 Broadcasted market data update for ${symbol} to ${this.clients.size} clients`,
+        );
+      }
+    } catch (err) {
+      this.logger.error(`❌ Broadcast market data update error:`, err);
+    }
   }
 
   /**

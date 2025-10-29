@@ -16,11 +16,15 @@ export interface RecentTradeData {
   takerSide: 'BUY' | 'SELL';
 }
 
+interface RecentTradesClient {
+  ws: any;
+  symbol: string;
+}
+
 @Injectable()
 export class RecentTradesGateway implements OnModuleInit, OnModuleDestroy {
   private logger = new Logger('RecentTradesGateway');
-  private clients = new Map<string, any>();
-  private intervals = new Map<string, NodeJS.Timeout>();
+  private clients = new Map<string, RecentTradesClient>();
 
   constructor(private readonly tradeService: TradeService) {}
 
@@ -29,9 +33,6 @@ export class RecentTradesGateway implements OnModuleInit, OnModuleDestroy {
   }
 
   onModuleDestroy() {
-    // Clear all intervals
-    this.intervals.forEach((interval) => clearInterval(interval));
-    this.intervals.clear();
     this.clients.clear();
     this.logger.log('🧹 RecentTradesGateway destroyed');
   }
@@ -39,7 +40,7 @@ export class RecentTradesGateway implements OnModuleInit, OnModuleDestroy {
   // Called by gateway middleware
   async handleConnection(ws: any, symbol: string) {
     const id = Math.random().toString(36);
-    this.clients.set(id, ws);
+    this.clients.set(id, { ws, symbol });
     this.logger.log(`🔗 RecentTrades Client connected: ${id} for ${symbol}`);
 
     // Send initial recent trades
@@ -50,27 +51,9 @@ export class RecentTradesGateway implements OnModuleInit, OnModuleDestroy {
       this.logger.error('Error fetching initial trades:', err);
     }
 
-    // Stream updates every 2 seconds
-    const interval = setInterval(async () => {
-      try {
-        if (ws.readyState === 1) {
-          // 1 = OPEN
-          const recentTrades = await this.getRecentTrades(symbol);
-          ws.send(JSON.stringify({ symbol, trades: recentTrades }));
-        }
-      } catch (err) {
-        this.logger.error('Stream error:', err);
-      }
-    }, 2000);
-
-    this.intervals.set(id, interval);
+    // No polling - updates pushed when trades happen via broadcastRecentTrade()
 
     ws.on('close', () => {
-      const intervalId = this.intervals.get(id);
-      if (intervalId) {
-        clearInterval(intervalId);
-        this.intervals.delete(id);
-      }
       this.clients.delete(id);
       this.logger.log(`🔌 RecentTrades Client disconnected: ${id}`);
     });
@@ -78,6 +61,38 @@ export class RecentTradesGateway implements OnModuleInit, OnModuleDestroy {
     ws.on('error', (err: any) => {
       this.logger.error(`❌ RecentTrades Client error: ${err.message}`);
     });
+  }
+
+  /**
+   * Broadcast new trade to all connected clients for a symbol
+   * Called when a trade happens
+   */
+  async broadcastRecentTrade(symbol: string): Promise<void> {
+    try {
+      // Find all clients subscribed to this symbol
+      for (const [id, client] of this.clients) {
+        if (client.symbol === symbol && client.ws.readyState === 1) {
+          const recentTrades = await this.getRecentTrades(client.symbol);
+
+          client.ws.send(
+            JSON.stringify({
+              symbol: client.symbol,
+              trades: recentTrades,
+              action: 'trade_update',
+              timestamp: Date.now(),
+            }),
+          );
+        }
+      }
+
+      if (this.clients.size > 0) {
+        this.logger.log(
+          `📊 Broadcasted recent trades for ${symbol} to ${this.clients.size} clients`,
+        );
+      }
+    } catch (err) {
+      this.logger.error(`❌ Broadcast recent trade error:`, err);
+    }
   }
 
   /**
