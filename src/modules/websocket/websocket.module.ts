@@ -19,7 +19,7 @@ import { TickerGateway } from './ticker.gateway';
     SymbolModule,
     forwardRef(() => OrderModule),
     UserModule,
-    CandleModule,
+    forwardRef(() => CandleModule),
   ],
   providers: [
     OrderBookGateway,

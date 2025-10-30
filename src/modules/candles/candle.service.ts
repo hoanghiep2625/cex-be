@@ -1,4 +1,4 @@
-import { Injectable, OnModuleInit } from '@nestjs/common';
+import { Injectable, OnModuleInit, Inject, forwardRef } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { RedisService } from 'src/modules/redis/redis.service';
 import { InjectRepository } from '@nestjs/typeorm';
@@ -15,6 +15,7 @@ import { Symbol } from '../symbols/entities/symbol.entity';
 import { QueryCandlesDto } from './dto/candle.dto';
 import { SymbolType } from '../symbols/enums/symbol-type.enum';
 import Decimal from 'decimal.js';
+import { CandleGateway } from '../websocket/candle.gateway';
 
 @Injectable()
 export class CandleService implements OnModuleInit {
@@ -26,6 +27,8 @@ export class CandleService implements OnModuleInit {
     @InjectRepository(Candle)
     private readonly candleRepo: Repository<Candle>,
     private readonly dataSource: DataSource,
+    @Inject(forwardRef(() => CandleGateway))
+    private readonly candleGateway: CandleGateway,
   ) {}
 
   async onModuleInit() {
@@ -194,6 +197,9 @@ export class CandleService implements OnModuleInit {
       }
 
       console.log('✅ Candles saved for all timeframes');
+
+      // 🚀 Broadcast candle update to WebSocket clients AFTER saving to DB
+      await this.candleGateway.broadcastCandleUpdate(data.symbol);
     } catch (err) {
       console.error('❌ Error saving candle:', err);
       console.error('❌ Error stack:', err.stack);
