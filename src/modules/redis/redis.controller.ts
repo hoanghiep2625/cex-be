@@ -54,7 +54,7 @@ export class RedisController {
     const client = this.redisService['redisClient'];
     const keys = await client.keys('orderbook:*');
     let deletedCount = 0;
-    
+
     if (keys.length > 0) {
       deletedCount = await client.del(...keys);
     }

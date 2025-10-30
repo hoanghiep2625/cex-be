@@ -1,12 +1,23 @@
 import {
-  Entity, PrimaryGeneratedColumn, Column, CreateDateColumn,
-  ManyToOne, JoinColumn, Index
+  Entity,
+  PrimaryGeneratedColumn,
+  Column,
+  CreateDateColumn,
+  ManyToOne,
+  JoinColumn,
+  Index,
 } from 'typeorm';
 import { User } from '../../users/entities/user.entity';
 import { Symbol } from '../../symbols/entities/symbol.entity';
 
-export enum OrderSide { BUY = 'BUY', SELL = 'SELL' }
-export enum LiquidityFlag { MAKER = 'M', TAKER = 'T' }
+export enum OrderSide {
+  BUY = 'BUY',
+  SELL = 'SELL',
+}
+export enum LiquidityFlag {
+  MAKER = 'M',
+  TAKER = 'T',
+}
 
 @Entity('trades')
 @Index(['symbol', 'created_at'])
@@ -52,13 +63,25 @@ export class Trade {
   quote_quantity: string;
 
   // Phí hai bên tách riêng
-  @Column({ type: 'decimal', precision: 38, scale: 18, name: 'maker_fee', default: '0' })
+  @Column({
+    type: 'decimal',
+    precision: 38,
+    scale: 18,
+    name: 'maker_fee',
+    default: '0',
+  })
   maker_fee: string;
 
   @Column({ type: 'text', name: 'maker_fee_asset', nullable: true })
   maker_fee_asset?: string;
 
-  @Column({ type: 'decimal', precision: 38, scale: 18, name: 'taker_fee', default: '0' })
+  @Column({
+    type: 'decimal',
+    precision: 38,
+    scale: 18,
+    name: 'taker_fee',
+    default: '0',
+  })
   taker_fee: string;
 
   @Column({ type: 'text', name: 'taker_fee_asset', nullable: true })

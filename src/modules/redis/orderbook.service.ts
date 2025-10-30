@@ -311,16 +311,31 @@ export class OrderBookService {
       });
     }
 
-    // Tính percentage cho bids
-    const maxBidTotal = bids.length > 0 ? bids[bids.length - 1].total : 1;
+    // Tìm quantity lớn nhất trong cả bids và asks
+    let maxQuantity = 0;
     bids.forEach((bid) => {
-      bid.percentage = (bid.total / maxBidTotal) * 100;
+      const qty = +bid.quantity;
+      if (qty > maxQuantity) {
+        maxQuantity = qty;
+      }
+    });
+    asks.forEach((ask) => {
+      const qty = +ask.quantity;
+      if (qty > maxQuantity) {
+        maxQuantity = qty;
+      }
     });
 
-    // Tính percentage cho asks
-    const maxAskTotal = asks.length > 0 ? asks[asks.length - 1].total : 1;
+    // Tránh chia cho 0
+    if (maxQuantity === 0) maxQuantity = 1;
+
+    // Tính percentage dựa trên quantity lớn nhất
+    bids.forEach((bid) => {
+      bid.percentage = (+bid.quantity / maxQuantity) * 100;
+    });
+
     asks.forEach((ask) => {
-      ask.percentage = (ask.total / maxAskTotal) * 100;
+      ask.percentage = (+ask.quantity / maxQuantity) * 100;
     });
 
     return {
@@ -353,9 +368,17 @@ export class OrderBookService {
 
     const levels: OrderBookLevel[] = [];
     let cumulativeQty = 0;
+    let maxQuantity = 0;
+
     for (const price of prices) {
       const qty = await this.getTotalQuantityAtPrice(symbol, sideKey, price);
       cumulativeQty += qty;
+
+      // Track max quantity
+      if (qty > maxQuantity) {
+        maxQuantity = qty;
+      }
+
       levels.push({
         price,
         quantity: qty.toString(),
@@ -365,10 +388,12 @@ export class OrderBookService {
       });
     }
 
-    // Tính percentage
-    const maxTotal = levels.length > 0 ? levels[levels.length - 1].total : 1;
+    // Tránh chia cho 0
+    if (maxQuantity === 0) maxQuantity = 1;
+
+    // Tính percentage dựa trên quantity lớn nhất
     levels.forEach((level) => {
-      level.percentage = (level.total / maxTotal) * 100;
+      level.percentage = (+level.quantity / maxQuantity) * 100;
     });
 
     return levels;
