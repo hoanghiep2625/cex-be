@@ -16,6 +16,8 @@ export interface OrderBookLevel {
   price: string;
   quantity: string;
   count: number;
+  total: number;
+  percentage: number;
 }
 
 export interface OrderBookSnapshot {
@@ -276,9 +278,17 @@ export class OrderBookService {
       limit - 1,
     );
     const bids: OrderBookLevel[] = [];
+    let cumulativeBidQty = 0;
     for (const price of bidsPrices) {
       const qty = await this.getTotalQuantityAtPrice(symbol, 'bids', price);
-      bids.push({ price, quantity: qty.toString(), count: 0 });
+      cumulativeBidQty += qty;
+      bids.push({
+        price,
+        quantity: qty.toString(),
+        count: 0,
+        total: cumulativeBidQty,
+        percentage: 0, // Sẽ tính sau
+      });
     }
 
     // Lấy asks (lowest prices first - ASC)
@@ -288,10 +298,30 @@ export class OrderBookService {
       limit - 1,
     );
     const asks: OrderBookLevel[] = [];
+    let cumulativeAskQty = 0;
     for (const price of asksPrices) {
       const qty = await this.getTotalQuantityAtPrice(symbol, 'asks', price);
-      asks.push({ price, quantity: qty.toString(), count: 0 });
+      cumulativeAskQty += qty;
+      asks.push({
+        price,
+        quantity: qty.toString(),
+        count: 0,
+        total: cumulativeAskQty,
+        percentage: 0, // Sẽ tính sau
+      });
     }
+
+    // Tính percentage cho bids
+    const maxBidTotal = bids.length > 0 ? bids[bids.length - 1].total : 1;
+    bids.forEach((bid) => {
+      bid.percentage = (bid.total / maxBidTotal) * 100;
+    });
+
+    // Tính percentage cho asks
+    const maxAskTotal = asks.length > 0 ? asks[asks.length - 1].total : 1;
+    asks.forEach((ask) => {
+      ask.percentage = (ask.total / maxAskTotal) * 100;
+    });
 
     return {
       symbol,
@@ -322,10 +352,24 @@ export class OrderBookService {
         : await client.zrange(`orderbook:${symbol}:${sideKey}`, 0, -1);
 
     const levels: OrderBookLevel[] = [];
+    let cumulativeQty = 0;
     for (const price of prices) {
       const qty = await this.getTotalQuantityAtPrice(symbol, sideKey, price);
-      levels.push({ price, quantity: qty.toString(), count: 0 });
+      cumulativeQty += qty;
+      levels.push({
+        price,
+        quantity: qty.toString(),
+        count: 0,
+        total: cumulativeQty,
+        percentage: 0,
+      });
     }
+
+    // Tính percentage
+    const maxTotal = levels.length > 0 ? levels[levels.length - 1].total : 1;
+    levels.forEach((level) => {
+      level.percentage = (level.total / maxTotal) * 100;
+    });
 
     return levels;
   }
