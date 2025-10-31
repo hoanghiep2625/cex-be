@@ -4,6 +4,8 @@ import {
   Column,
   CreateDateColumn,
   UpdateDateColumn,
+  Index,
+  Unique,
 } from 'typeorm';
 
 export enum UserRole {
@@ -12,16 +14,20 @@ export enum UserRole {
   SUPER_ADMIN = 'SUPER_ADMIN',
 }
 
-/**
- * User Entity - Định nghĩa cấu trúc bảng users trong database
- * Sử dụng TypeORM decorators để map class với database table
- */
 @Entity('users') // Chỉ định tên bảng trong database là 'users'
+@Unique(['email']) // Unique constraint on email
+@Index(['email']) // Index for faster email lookups
 export class User {
-  @PrimaryGeneratedColumn() // Tự động tăng primary key
+  @PrimaryGeneratedColumn({ type: 'integer' })
   id: number;
 
-  @Column({ unique: true }) // Cột email, phải là duy nhất (không trùng lặp)
+  /**
+   * Email address - must be unique
+   * Unique constraint ensures no duplicate emails
+   */
+  @Column({
+    unique: true,
+  })
   email: string;
 
   @Column() // Cột tên người dùng
@@ -44,9 +50,15 @@ export class User {
   })
   is_active: boolean; // Tài khoản có active không
 
-  @CreateDateColumn({ name: 'created_at' }) // Tự động set thời gian tạo record
+  @CreateDateColumn({
+    name: 'created_at',
+    type: 'timestamptz',
+  }) // Tự động set thời gian tạo record
   created_at: Date;
 
-  @UpdateDateColumn({ name: 'updated_at' }) // Tự động update thời gian khi record được sửa
+  @UpdateDateColumn({
+    name: 'updated_at',
+    type: 'timestamptz',
+  }) // Tự động update thời gian khi record được sửa
   updated_at: Date;
 }

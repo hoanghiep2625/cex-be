@@ -17,7 +17,7 @@ import { SymbolType } from '../enums/symbol-type.enum';
 @Index(['quote_asset'])
 @Index(['status'])
 export class Symbol {
-  @PrimaryGeneratedColumn()
+  @PrimaryGeneratedColumn({ type: 'integer' })
   id: number;
 
   @Column({

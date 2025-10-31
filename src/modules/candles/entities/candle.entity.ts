@@ -25,7 +25,6 @@ export type CandleTimeframe =
 @Entity('candles')
 @Check(`timeframe IN ('1m','5m','15m','30m','1h','4h','1d','1w','1M')`)
 @Index(['symbol_id', 'timeframe', 'open_time'], { unique: true })
-@Index(['symbol', 'timeframe', 'open_time'])
 export class Candle {
   @PrimaryColumn({ type: 'integer' })
   symbol_id: number;
@@ -36,15 +35,16 @@ export class Candle {
   @PrimaryColumn({ name: 'open_time', type: 'timestamptz' })
   open_time: Date;
 
-  @Column({ type: 'text' })
-  symbol: string; // 'BTCUSDT', 'ETHUSDT' - denormalized for faster queries
-
+  /**
+   * Symbol type - denormalized from symbols table for query performance
+   * Using symbol_id as FK, type is denormalized for faster queries
+   */
   @Column({
     type: 'enum',
     enum: SymbolType,
     default: SymbolType.SPOT,
   })
-  type: SymbolType; // SPOT, FUTURES, MARGIN - denormalized
+  type: SymbolType; // SPOT, FUTURES, MARGIN - denormalized for query performance
 
   @Column({ name: 'close_time', type: 'timestamptz' })
   close_time: Date;
@@ -85,7 +85,14 @@ export class Candle {
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   created_at: Date;
 
+  /**
+   * Foreign Key: candles.symbol_id → symbols.id
+   * Constraint: ON DELETE CASCADE (delete candles when symbol is deleted)
+   */
   @ManyToOne(() => Symbol, { onDelete: 'CASCADE' })
-  @JoinColumn({ name: 'symbol_id' })
+  @JoinColumn({
+    name: 'symbol_id',
+    referencedColumnName: 'id',
+  })
   symbol_entity: Symbol;
 }

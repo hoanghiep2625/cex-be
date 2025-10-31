@@ -18,7 +18,10 @@ export class UserSession {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column('int')
+  @Column({
+    name: 'user_id',
+    type: 'integer',
+  })
   user_id: number;
 
   @ManyToOne(() => User, { onDelete: 'CASCADE' })
@@ -34,13 +37,21 @@ export class UserSession {
   @Column('varchar', { length: 255, nullable: true })
   user_agent: string;
 
-  @Column('timestamp')
+  @Column({
+    type: 'timestamptz',
+  })
   expires_at: Date;
 
-  @CreateDateColumn()
+  @CreateDateColumn({
+    name: 'created_at',
+    type: 'timestamptz',
+  })
   created_at: Date;
 
-  @UpdateDateColumn()
+  @UpdateDateColumn({
+    name: 'updated_at',
+    type: 'timestamptz',
+  })
   updated_at: Date;
 
   /**

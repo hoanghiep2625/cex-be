@@ -281,14 +281,14 @@ export class TradingBotService implements OnModuleInit {
     // Cancel lệnh của cả 2 bot users
     const botBuyOrders = await orderRepo.find({
       where: {
-        user_id: this.config.botBuyUserId.toString(),
+        user_id: this.config.botBuyUserId,
         status: OrderStatus.NEW,
       },
     });
 
     const botSellOrders = await orderRepo.find({
       where: {
-        user_id: this.config.botSellUserId.toString(),
+        user_id: this.config.botSellUserId,
         status: OrderStatus.NEW,
       },
     });

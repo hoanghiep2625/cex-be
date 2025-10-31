@@ -45,11 +45,22 @@ export class Order {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column({ name: 'user_id' })
-  user_id: string;
+  /**
+   * Foreign Key to users.id
+   * Type: integer to match users.id
+   */
+  @Column({
+    name: 'user_id',
+    type: 'integer',
+  })
+  user_id: number; // Foreign key to users.id
 
+  /**
+   * Foreign Key to symbols.symbol
+   * Type: text to match symbols.symbol
+   */
   @Column()
-  symbol: string;
+  symbol: string; // Foreign key to symbols.symbol
 
   @Column({ type: 'enum', enum: OrderSide })
   side: OrderSide;
@@ -82,19 +93,39 @@ export class Order {
   @Column({ nullable: true, name: 'client_order_id' })
   client_order_id?: string | null;
 
-  @CreateDateColumn({ name: 'created_at' })
+  @CreateDateColumn({
+    name: 'created_at',
+    type: 'timestamptz',
+  })
   created_at: Date;
 
-  @UpdateDateColumn({ name: 'updated_at' })
+  @UpdateDateColumn({
+    name: 'updated_at',
+    type: 'timestamptz',
+  })
   updated_at: Date;
 
   // Relations
+  /**
+   * Foreign Key: orders.user_id → users.id
+   * Constraint: ON DELETE RESTRICT (prevent user deletion if orders exist)
+   */
   @ManyToOne(() => User, { eager: false, onDelete: 'RESTRICT' })
-  @JoinColumn({ name: 'user_id' })
+  @JoinColumn({
+    name: 'user_id',
+    referencedColumnName: 'id',
+  })
   user: User;
 
+  /**
+   * Foreign Key: orders.symbol → symbols.symbol
+   * Constraint: ON DELETE RESTRICT (prevent symbol deletion if orders exist)
+   */
   @ManyToOne(() => Symbol, { eager: false, onDelete: 'RESTRICT' })
-  @JoinColumn({ name: 'symbol', referencedColumnName: 'symbol' })
+  @JoinColumn({
+    name: 'symbol',
+    referencedColumnName: 'symbol',
+  })
   symbol_entity: Symbol;
 
   get is_active(): boolean {

@@ -153,7 +153,7 @@ export class MatchingEngineService {
     try {
       await this.orderBookService.addOrder(order.symbol, {
         orderId: order.id,
-        userId: parseInt(order.user_id),
+        userId: order.user_id,
         price: order.price,
         quantity: order.qty,
         remainingQty: order.qty,

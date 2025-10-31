@@ -71,7 +71,7 @@ export class OrderService {
       if (createOrderDto.client_order_id) {
         const existingOrder = await this.orderRepository.findOne({
           where: {
-            user_id: user_id.toString(),
+            user_id: user_id,
             client_order_id: createOrderDto.client_order_id,
           },
         });
@@ -96,7 +96,7 @@ export class OrderService {
 
       // 5. Create order (UUID sẽ tự sinh)
       const order = this.orderRepository.create({
-        user_id: user_id.toString(),
+        user_id: user_id,
         symbol: createOrderDto.symbol,
         side: createOrderDto.side,
         type: createOrderDto.type,
@@ -112,7 +112,7 @@ export class OrderService {
       await queryRunner.commitTransaction();
 
       // 🎯 Get full order with relations để return & publish
-      const fullOrder = await this.findOrderById(savedOrder.id);
+      const fullOrder = await this.findOrderById((savedOrder as Order).id);
 
       // 🎯 Trigger matching engine & publish event in parallel (fire-and-forget)
       if (fullOrder.type === OrderType.LIMIT && fullOrder.price) {
@@ -169,7 +169,7 @@ export class OrderService {
       const order = await queryRunner.manager.findOne(Order, {
         where: {
           id: order_id,
-          user_id: user_id.toString(),
+          user_id: user_id,
         },
         relations: ['symbol_entity'],
       });
@@ -440,7 +440,7 @@ export class OrderService {
           // Add to order book
           await this.orderBookService.addOrder(order.symbol, {
             orderId: order.id,
-            userId: parseInt(order.user_id),
+            userId: order.user_id,
             price: order.price,
             quantity: order.qty,
             remainingQty: remainingQty.toString(),
@@ -562,7 +562,7 @@ export class OrderService {
   async getPendingOrders(user_id: number, symbol?: string) {
     const query = this.orderRepository
       .createQueryBuilder('order')
-      .where('order.user_id = :user_id', { user_id: user_id.toString() })
+      .where('order.user_id = :user_id', { user_id: user_id })
       .andWhere('order.status IN (:...statuses)', {
         statuses: [OrderStatus.NEW, OrderStatus.PARTIALLY_FILLED],
       })

@@ -48,11 +48,15 @@ export class Ledger {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
+  /**
+   * Foreign Key to users.id
+   * Type: integer to match users.id
+   */
   @Column({
     name: 'user_id',
-    type: 'bigint',
+    type: 'integer',
   })
-  user_id: number;
+  user_id: number; // Foreign key to users.id
 
   @Column({
     type: 'text',
@@ -96,13 +100,20 @@ export class Ledger {
     type: 'text',
     nullable: true,
   })
-  reference_type?: string; // 'trade', 'order', 'deposit', 'withdrawal', 'transfer'
+  reference_type?: string; // 'trade', 'order', 'deposit', 'withdrawal', 'transfer', 'user'
 
+  /**
+   * Reference ID - format depends on reference_type:
+   * - 'trade' | 'order' → UUID (string)
+   * - 'user' → integer (string representation)
+   * - 'deposit' | 'withdrawal' → UUID or integer (string representation)
+   * Stored as text for flexibility
+   */
   @Column({
     type: 'text',
     nullable: true,
   })
-  reference_id?: string; // ID của trade/order/deposit/withdrawal
+  reference_id?: string; // ID of referenced entity (UUID or integer as string)
 
   @Column({
     type: 'text',
@@ -123,7 +134,14 @@ export class Ledger {
   created_at: Date;
 
   // Relations
+  /**
+   * Foreign Key: ledgers.user_id → users.id
+   * Constraint: ON DELETE CASCADE (delete ledgers when user is deleted)
+   */
   @ManyToOne(() => User, { onDelete: 'CASCADE' })
-  @JoinColumn({ name: 'user_id' })
+  @JoinColumn({
+    name: 'user_id',
+    referencedColumnName: 'id',
+  })
   user: User;
 }

@@ -25,13 +25,17 @@ export enum WalletType {
 @Index(['user_id', 'currency', 'wallet_type'], { unique: true }) // 1 user = 1 balance per currency per wallet type
 export class Balance {
   @PrimaryGeneratedColumn('increment', { type: 'bigint' })
-  id: string; // BIGSERIAL -> string để tránh overflow
+  id: string; // BIGSERIAL -> string để tránh overflow (JavaScript number max safe integer)
 
+  /**
+   * Foreign Key to users.id
+   * Type: integer to match users.id
+   */
   @Column({
     name: 'user_id',
-    type: 'bigint',
+    type: 'integer',
   })
-  user_id: number; // Foreign key
+  user_id: number; // Foreign key to users.id
 
   @Column({
     type: 'text',
@@ -74,11 +78,25 @@ export class Balance {
   updated_at: Date; // Auto trigger trong DB
 
   // Relations
+  /**
+   * Foreign Key: balances.user_id → users.id
+   * Constraint: ON DELETE CASCADE (delete balances when user is deleted)
+   */
   @ManyToOne(() => User, { onDelete: 'CASCADE' })
-  @JoinColumn({ name: 'user_id' })
+  @JoinColumn({
+    name: 'user_id',
+    referencedColumnName: 'id',
+  })
   user: User;
 
-  @ManyToOne(() => Asset, (asset) => asset.balances)
-  @JoinColumn({ name: 'currency', referencedColumnName: 'code' })
+  /**
+   * Foreign Key: balances.currency → assets.code
+   * Constraint: ON DELETE RESTRICT (prevent asset deletion if balances exist)
+   */
+  @ManyToOne(() => Asset, (asset) => asset.balances, { onDelete: 'RESTRICT' })
+  @JoinColumn({
+    name: 'currency',
+    referencedColumnName: 'code',
+  })
   asset: Asset;
 }

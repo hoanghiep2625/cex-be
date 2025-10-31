@@ -26,6 +26,8 @@ export class CandleService implements OnModuleInit {
     private readonly redisService: RedisService,
     @InjectRepository(Candle)
     private readonly candleRepo: Repository<Candle>,
+    @InjectRepository(Symbol)
+    private readonly symbolRepo: Repository<Symbol>,
     private readonly dataSource: DataSource,
     @Inject(forwardRef(() => CandleGateway))
     private readonly candleGateway: CandleGateway,
@@ -148,7 +150,6 @@ export class CandleService implements OnModuleInit {
         if (!candle) {
           candle = this.candleRepo.create({
             symbol_id: symbolId,
-            symbol: data.symbol,
             type: data.type,
             timeframe: tf.name,
             open_time: openTime,
@@ -221,9 +222,18 @@ export class CandleService implements OnModuleInit {
       endTime,
     } = query;
 
-    // Build where clause
+    // Get symbol_id from symbol string
+    const symbolEntity = await this.symbolRepo.findOne({
+      where: { symbol: symbol.toUpperCase(), type },
+    });
+
+    if (!symbolEntity) {
+      return []; // Return empty array if symbol not found
+    }
+
+    // Build where clause using symbol_id
     const where: any = {
-      symbol,
+      symbol_id: symbolEntity.id,
       type,
       timeframe: interval,
     };
@@ -246,7 +256,7 @@ export class CandleService implements OnModuleInit {
 
     // Transform to response format (convert Date to epoch ms)
     return candles.map((candle) => ({
-      symbol: candle.symbol,
+      symbol: symbol, // Use the input symbol string
       type: candle.type,
       interval: candle.timeframe,
       open_time: candle.open_time.getTime(),
@@ -385,7 +395,6 @@ export class CandleService implements OnModuleInit {
               // Chỉ tạo nến nếu có giá từ nến trước
               const newCandle = this.candleRepo.create({
                 symbol_id: symbol.id,
-                symbol: symbol.symbol,
                 type: symbol.type,
                 timeframe: tf.name,
                 open_time: openTime,

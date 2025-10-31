@@ -39,11 +39,19 @@ export class Trade {
   @Column({ name: 'taker_order_id' })
   taker_order_id: string;
 
+  /**
+   * Foreign Key to users.id (maker user)
+   * Type: integer to match users.id
+   */
   @Column({ name: 'maker_user_id', type: 'integer' })
-  maker_user_id: number;
+  maker_user_id: number; // Foreign key to users.id
 
+  /**
+   * Foreign Key to users.id (taker user)
+   * Type: integer to match users.id
+   */
   @Column({ name: 'taker_user_id', type: 'integer' })
-  taker_user_id: number;
+  taker_user_id: number; // Foreign key to users.id
 
   // Chỉ cần lưu taker_side (aggressor). Maker side = opposite.
   @Column({ name: 'taker_side', type: 'enum', enum: OrderSide })
@@ -90,15 +98,37 @@ export class Trade {
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   created_at: Date;
 
-  @ManyToOne(() => User, { eager: false })
-  @JoinColumn({ name: 'maker_user_id' })
+  // Relations
+  /**
+   * Foreign Key: trades.maker_user_id → users.id
+   * Constraint: ON DELETE RESTRICT (prevent user deletion if trades exist)
+   */
+  @ManyToOne(() => User, { eager: false, onDelete: 'RESTRICT' })
+  @JoinColumn({
+    name: 'maker_user_id',
+    referencedColumnName: 'id',
+  })
   maker_user: User;
 
-  @ManyToOne(() => User, { eager: false })
-  @JoinColumn({ name: 'taker_user_id' })
+  /**
+   * Foreign Key: trades.taker_user_id → users.id
+   * Constraint: ON DELETE RESTRICT (prevent user deletion if trades exist)
+   */
+  @ManyToOne(() => User, { eager: false, onDelete: 'RESTRICT' })
+  @JoinColumn({
+    name: 'taker_user_id',
+    referencedColumnName: 'id',
+  })
   taker_user: User;
 
-  @ManyToOne(() => Symbol, { eager: false })
-  @JoinColumn({ name: 'symbol', referencedColumnName: 'symbol' })
+  /**
+   * Foreign Key: trades.symbol → symbols.symbol
+   * Constraint: ON DELETE RESTRICT (prevent symbol deletion if trades exist)
+   */
+  @ManyToOne(() => Symbol, { eager: false, onDelete: 'RESTRICT' })
+  @JoinColumn({
+    name: 'symbol',
+    referencedColumnName: 'symbol',
+  })
   symbol_entity: Symbol;
 }

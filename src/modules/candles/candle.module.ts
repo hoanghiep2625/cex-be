@@ -4,12 +4,13 @@ import { ScheduleModule } from '@nestjs/schedule';
 import { CandleService } from './candle.service';
 import { CandleController } from './candle.controller';
 import { Candle } from './entities/candle.entity';
+import { Symbol } from '../symbols/entities/symbol.entity';
 import { RedisModule } from '../redis/redis.module';
 import { WebSocketModule } from '../websocket/websocket.module';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Candle]),
+    TypeOrmModule.forFeature([Candle, Symbol]),
     RedisModule,
     ScheduleModule.forRoot(),
     forwardRef(() => WebSocketModule),
