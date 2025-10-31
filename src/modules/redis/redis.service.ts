@@ -15,6 +15,7 @@ export class RedisService implements OnModuleDestroy {
       host: this.configService.get('REDIS_HOST', '127.0.0.1'),
       port: this.configService.get('REDIS_PORT', 6379),
       password: this.configService.get('REDIS_PASSWORD', undefined),
+      db: this.configService.get('REDIS_DB', 1),
       lazyConnect: true,
     });
 

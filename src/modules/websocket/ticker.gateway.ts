@@ -6,12 +6,6 @@ import {
 } from '@nestjs/common';
 import { SymbolService } from '../symbols/symbol.service';
 
-/**
- * Ticker WebSocket Gateway
- * Provides real-time price updates for multiple symbols
- *
- * Endpoint: ws://localhost:3000/ws/ticker?quote_asset=USDT
- */
 @Injectable()
 export class TickerGateway implements OnModuleInit, OnModuleDestroy {
   private logger = new Logger('TickerGateway');
@@ -28,12 +22,6 @@ export class TickerGateway implements OnModuleInit, OnModuleDestroy {
     this.logger.log('🧹 TickerGateway destroyed');
   }
 
-  /**
-   * Handle WebSocket connection to /ws/ticker
-   * @param ws - WebSocket connection
-   * @param quoteAsset - Quote asset to filter (USDT, BTC, etc.)
-   * @param type - Trading type (spot, margin, futures)
-   */
   async handleConnection(
     ws: any,
     quoteAsset: string = 'USDT',
@@ -45,7 +33,6 @@ export class TickerGateway implements OnModuleInit, OnModuleDestroy {
       `🔗 Ticker Client connected: ${id} (quote: ${quoteAsset}, type: ${type})`,
     );
 
-    // Send initial ticker data
     try {
       const tickers = await this.symbolService.getAllSymbolsWithMarketData({
         quote_asset: quoteAsset,
@@ -70,8 +57,6 @@ export class TickerGateway implements OnModuleInit, OnModuleDestroy {
       this.logger.error(`❌ Error fetching initial ticker data:`, err);
     }
 
-    // No polling - updates pushed only when trades happen via broadcastTickerUpdate()
-
     ws.on('close', () => {
       this.clients.delete(id);
       this.logger.log(`🔌 Ticker Client disconnected: ${id}`);
@@ -82,22 +67,23 @@ export class TickerGateway implements OnModuleInit, OnModuleDestroy {
     });
   }
 
-  /**
-   * Broadcast ticker update to all connected clients
-   * Called when a trade happens
-   */
-  async broadcastTickerUpdate(symbol: string): Promise<void> {
+  async broadcastTickerUpdate(
+    symbol: string,
+    type: string = 'spot',
+  ): Promise<void> {
     try {
-      // Get updated market data for this symbol
-      const [baseAsset, quoteAsset] = this.parseSymbol(symbol);
+      const symbolEntity = await this.symbolService.getSymbolBySymbolAndType(
+        symbol,
+        type,
+      );
+      const quoteAsset = symbolEntity.quote_asset;
 
-      // Send update to all clients subscribed to this quote asset
       for (const [id, { ws, quoteAsset: clientQuote }] of this.clients) {
         if (clientQuote === quoteAsset && ws.readyState === 1) {
           const tickers = await this.symbolService.getAllSymbolsWithMarketData({
             quote_asset: clientQuote,
             status: 'TRADING',
-            type: 'spot' as any,
+            type: type as any,
           });
 
           ws.send(
@@ -113,24 +99,5 @@ export class TickerGateway implements OnModuleInit, OnModuleDestroy {
     } catch (err) {
       this.logger.error(`❌ Broadcast ticker update error:`, err);
     }
-  }
-
-  /**
-   * Parse symbol into base and quote assets
-   * e.g., BTCUSDT -> ['BTC', 'USDT']
-   */
-  private parseSymbol(symbol: string): [string, string] {
-    // Common quote assets
-    const quoteAssets = ['USDT', 'BUSD', 'USDC', 'BTC', 'ETH', 'BNB'];
-
-    for (const quote of quoteAssets) {
-      if (symbol.endsWith(quote)) {
-        const base = symbol.slice(0, -quote.length);
-        return [base, quote];
-      }
-    }
-
-    // Fallback: assume last 3-4 chars are quote
-    return [symbol.slice(0, -4), symbol.slice(-4)];
   }
 }

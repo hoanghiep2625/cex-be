@@ -267,19 +267,12 @@ export class SymbolService {
     };
   }
 
-  /**
-   * Get all symbols with market data (price + change%)
-   * Optimized: Batch query for performance
-   */
   async getAllSymbolsWithMarketData(filters?: SymbolFilterDto) {
-    // Get all symbols matching filters
     const symbols = await this.getAllSymbols(filters);
 
-    // Get all trades from last 24h for all symbols
     const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
     const symbolCodes = symbols.map((s) => s.symbol);
 
-    // Batch query: Get all recent trades
     const recentTrades = await this.tradeRepository
       .createQueryBuilder('trade')
       .where('trade.symbol IN (:...symbols)', { symbols: symbolCodes })
@@ -290,7 +283,6 @@ export class SymbolService {
       .addOrderBy('trade.created_at', 'DESC')
       .getMany();
 
-    // Group trades by symbol
     const tradesBySymbol = new Map<string, typeof recentTrades>();
     for (const trade of recentTrades) {
       if (!tradesBySymbol.has(trade.symbol)) {
@@ -299,7 +291,6 @@ export class SymbolService {
       tradesBySymbol.get(trade.symbol)!.push(trade);
     }
 
-    // Calculate market data for each symbol
     const result = symbols.map((symbol) => {
       const trades = tradesBySymbol.get(symbol.symbol) || [];
 
@@ -307,11 +298,9 @@ export class SymbolService {
       let priceChangePercent24h = 0;
 
       if (trades.length > 0) {
-        // Current price = most recent trade
         const currentPrice = new Decimal(trades[0].price);
         price = parseFloat(currentPrice.toFixed(8));
 
-        // Get oldest trade for 24h change
         const oldestTrade = trades[trades.length - 1];
         const openPrice = new Decimal(oldestTrade.price);
 

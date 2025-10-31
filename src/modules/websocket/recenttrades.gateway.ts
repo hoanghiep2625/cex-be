@@ -12,7 +12,7 @@ export interface RecentTradeData {
   symbol: string;
   price: string;
   quantity: string;
-  time: number; // timestamp in milliseconds
+  time: number;
   takerSide: 'BUY' | 'SELL';
 }
 
@@ -37,21 +37,17 @@ export class RecentTradesGateway implements OnModuleInit, OnModuleDestroy {
     this.logger.log('🧹 RecentTradesGateway destroyed');
   }
 
-  // Called by gateway middleware
   async handleConnection(ws: any, symbol: string) {
     const id = Math.random().toString(36);
     this.clients.set(id, { ws, symbol });
     this.logger.log(`🔗 RecentTrades Client connected: ${id} for ${symbol}`);
 
-    // Send initial recent trades
     try {
       const recentTrades = await this.getRecentTrades(symbol);
       ws.send(JSON.stringify({ symbol, trades: recentTrades }));
     } catch (err) {
       this.logger.error('Error fetching initial trades:', err);
     }
-
-    // No polling - updates pushed when trades happen via broadcastRecentTrade()
 
     ws.on('close', () => {
       this.clients.delete(id);
@@ -63,13 +59,8 @@ export class RecentTradesGateway implements OnModuleInit, OnModuleDestroy {
     });
   }
 
-  /**
-   * Broadcast new trade to all connected clients for a symbol
-   * Called when a trade happens
-   */
   async broadcastRecentTrade(symbol: string): Promise<void> {
     try {
-      // Find all clients subscribed to this symbol
       for (const [id, client] of this.clients) {
         if (client.symbol === symbol && client.ws.readyState === 1) {
           const recentTrades = await this.getRecentTrades(client.symbol);
@@ -95,16 +86,8 @@ export class RecentTradesGateway implements OnModuleInit, OnModuleDestroy {
     }
   }
 
-  /**
-   * Fetch recent trades from database
-   * Returns the last 50 trades sorted by most recent first
-   *
-   * @param symbol - Trading pair (BTCUSDT)
-   * @returns Array of recent trades with price, quantity, and timestamp
-   */
   private async getRecentTrades(symbol: string): Promise<RecentTradeData[]> {
     try {
-      // Using raw query for better performance
       const trades = await this.tradeService.getRecentTrades(symbol, 50);
 
       return trades.map((trade: Trade) => ({
